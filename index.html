@@ -6,7 +6,7 @@
     <title>衛武營停車導航 App</title>
     
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    
+    <link rel="manifest" href="manifest.json">
     <style>
         body { margin: 0; padding: 0; background: #eee; }
         #map { height: 100vh; width: 100vw; }
@@ -67,6 +67,12 @@
 <div id="map"></div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<script>
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('sw.js');
+  }
+</script>
 
 <script>
     // 1. 初始化地圖
