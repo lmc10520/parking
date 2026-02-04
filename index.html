@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>衛武營停車導航 App</title>
+    
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    
+    <style>
+        body { margin: 0; padding: 0; background: #eee; }
+        #map { height: 100vh; width: 100vw; }
+        
+        .search-container {
+            position: absolute; top: 15px; left: 15px; z-index: 1000;
+            background: rgba(255, 255, 255, 0.95); padding: 12px; border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.25); width: 260px;
+            font-family: sans-serif;
+        }
+        #combinedInput {
+            width: 100%; height: 45px; font-size: 22px; text-align: center;
+            margin-bottom: 12px; border: 2px solid #ccc; border-radius: 8px;
+            background: #fff; box-sizing: border-box;
+        }
+        .keypad { display: flex; flex-direction: column; gap: 6px; }
+        .key-row { display: flex; justify-content: space-between; gap: 6px; }
+        
+        .key-btn {
+            flex: 1; height: 55px; font-size: 18px; font-weight: bold;
+            cursor: pointer; border: 1px solid #bbb; border-radius: 8px;
+            background: #ffffff; color: #333;
+            display: flex; align-items: center; justify-content: center;
+            transition: background 0.1s;
+        }
+        .key-btn:active { background: #ddd; transform: scale(0.95); }
+        .key-btn.letter { background: #f0f7ff; color: #007bff; border-color: #b3d7ff; }
+        .key-btn.func-clear { background: #fff5f5; color: #e03131; border-color: #ffa8a8; font-size: 16px; }
+        .key-btn.func-search { background: #f4fce3; color: #2f9e44; border-color: #c0eb75; font-size: 16px; }
+
+        /* 讓 Popup 文字大一點 */
+        .leaflet-popup-content { font-size: 16px; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+<div class="search-container">
+    <input type="text" id="combinedInput" placeholder="請點選按鈕" readonly>
+    <div class="keypad">
+        <div class="key-row">
+            <button class="key-btn letter" onclick="appendKey('A')">A</button>
+            <button class="key-btn letter" onclick="appendKey('B')">B</button>
+            <button class="key-btn letter" onclick="appendKey('C')">C</button>
+            <button class="key-btn letter" onclick="appendKey('D')">D</button>
+            <button class="key-btn letter" onclick="appendKey('E')">E</button>
+        </div>
+        <div class="key-row"><button class="key-btn" onclick="appendKey('1')">1</button><button class="key-btn" onclick="appendKey('2')">2</button><button class="key-btn" onclick="appendKey('3')">3</button></div>
+        <div class="key-row"><button class="key-btn" onclick="appendKey('4')">4</button><button class="key-btn" onclick="appendKey('5')">5</button><button class="key-btn" onclick="appendKey('6')">6</button></div>
+        <div class="key-row"><button class="key-btn" onclick="appendKey('7')">7</button><button class="key-btn" onclick="appendKey('8')">8</button><button class="key-btn" onclick="appendKey('9')">9</button></div>
+        <div class="key-row">
+            <button class="key-btn func-clear" onclick="clearInput()">清除</button>
+            <button class="key-btn" onclick="appendKey('0')">0</button>
+            <button class="key-btn func-search" onclick="executeSearch()">搜尋</button>
+        </div>
+    </div>
+</div>
+
+<div id="map"></div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<script>
+    // 1. 初始化地圖
+    const map = L.map('map', {
+        center: [22.6231, 120.3425],
+        zoom: 18,
+        maxZoom: 24,
+        minZoom: 15
+    });
+
+    // 2. 底圖圖層 (設定較淡透明度)
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+        opacity: 0.3,
+        maxZoom: 24,
+        maxNativeZoom: 19
+    }).addTo(map);
+
+    // 3. SVG 平面圖圖層
+    const imageBounds = [[22.62193, 120.34105], [22.62406, 120.34360]]; 
+    const svgOverlay = L.imageOverlay('B2-20250921.svg', imageBounds, {
+        opacity: 0.8,
+        interactive: false // 設定為 false，避免阻擋下方 GeoJSON 的點擊事件
+    }).addTo(map);
+
+    let geojsonLayer;
+    let currentInput = "";
+
+    // 4. 載入數據
+    fetch('weiwuying_parking.geojson')
+        .then(response => response.json())
+        .then(data => {
+            geojsonLayer = L.geoJSON(data, {
+                // --- 關鍵修改：處理「點」類型的資料 (柱子) ---
+                pointToLayer: function (feature, latlng) {
+                    return L.circleMarker(latlng, {
+                        radius: 3,           // 設定半徑，3 像素非常小巧
+                        fillColor: "#ff9800", // 柱子用橘色填充
+                        color: "#000",       // 黑色邊框
+                        weight: 1,           // 邊框粗細
+                        opacity: 1,
+                        fillOpacity: 0.5
+                    });
+                },
+                // --- 處理「多邊形」類型的資料 (停車格) ---
+                style: function(feature) {
+                    return {
+                        "color": "#3388ff",
+                        "opacity": 0.05,
+                        "weight": 1,
+                        "fillOpacity": 0 // 平時幾乎透明，不干擾畫面
+                    };
+                },
+                onEachFeature: function (feature, layer) {
+                    if (feature.properties && feature.properties.name) {
+                        layer.bindPopup("名稱: " + feature.properties.name);
+                    }
+                }
+            }).addTo(map);
+            console.log("數據載入成功");
+        })
+        .catch(err => console.error("載入失敗:", err));
+
+    // 鍵盤輸入功能
+    function appendKey(key) {
+        currentInput += key;
+        document.getElementById('combinedInput').value = currentInput;
+    }
+
+    function clearInput() {
+        currentInput = "";
+        document.getElementById('combinedInput').value = "";
+        resetHighlights();
+    }
+
+    // 核心搜尋邏輯
+    function executeSearch() {
+        if (!currentInput || !geojsonLayer) return;
+
+        const isPillar = /[A-E]/.test(currentInput);
+        let foundLayer = null;
+
+        geojsonLayer.eachLayer(function (layer) {
+            // 統一轉大寫比對，增加搜尋成功率
+            if (layer.feature.properties.name.toString().toUpperCase() === currentInput.toUpperCase()) {
+                foundLayer = layer;
+            }
+        });
+
+        if (foundLayer) {
+            focusOnTarget(foundLayer, isPillar);
+        } else {
+            alert("找不到: " + currentInput);
+            clearInput();
+        }
+    }
+
+    function focusOnTarget(layer, isPillar) {
+        resetHighlights();
+
+        // 通用取得中心點邏輯 (相容 Point 與 Polygon)
+        let center;
+        if (layer.getLatLng) {
+            center = layer.getLatLng();
+        } else {
+            center = layer.getBounds().getCenter();
+        }
+
+        map.setView(center, 22);
+
+        if (isPillar) {
+            // 柱子：建立一個突出的圓圈
+            window.highlightMarker = L.circleMarker(center, {
+                radius: 25,
+                color: '#ff9800',
+                weight: 5,
+                fillColor: '#ff9800',
+                fillOpacity: 0.5,
+                pane: 'markerPane' // 確保在最上層
+            }).addTo(map);
+        } else {
+            // 車位：改變多邊形顏色
+            layer.setStyle({
+                color: '#ff0000',
+                weight: 4,
+                fillColor: '#ffff00',
+                fillOpacity: 0.7
+            });
+            // 確保被選中的車位不會被 SVG 蓋住
+            if (layer.bringToFront) layer.bringToFront();
+            window.activeSpot = layer;
+        }
+
+        layer.openPopup(center);
+    }
+
+    function resetHighlights() {
+        if (window.highlightMarker) {
+            map.removeLayer(window.highlightMarker);
+            window.highlightMarker = null;
+        }
+        if (window.activeSpot && geojsonLayer) {
+            geojsonLayer.resetStyle(window.activeSpot);
+            window.activeSpot = null;
+        }
+    }
+
+    // 點擊除錯工具
+    map.on('click', function(e) {
+        console.log(`"coords": [${e.latlng.lng.toFixed(5)}, ${e.latlng.lat.toFixed(5)}]`);
+    });
+</script>
+</body>
+</html>
