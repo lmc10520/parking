@@ -5,17 +5,18 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <title>B2停車場</title>
     
-    <!-- 1. 先引入標準 Leaflet CSS -->
+    <!-- 引入支援旋轉功能的 Leaflet 資源 -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <!-- 2. 再引入旋轉插件 CSS -->
     <link rel="stylesheet" href="https://unpkg.com/@runette/leaflet-rotate@0.2.0/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/@runette/leaflet-rotate@0.2.0/dist/leaflet.js"></script>
     
     <link rel="manifest" href="manifest.json">
     <link rel="icon" href="icon.png" type="image/png">
     <link rel="apple-touch-icon" href="icon.png">
 
     <style>
-        body { margin: 0; padding: 0; background: #eee; overflow: hidden; }
+        body { margin: 0; padding: 0; background: #eee; overflow: hidden; touch-action: none; }
         #map { height: 100vh; width: 100vw; background-color: #f0f0f0; }
         
         .search-container {
@@ -26,9 +27,11 @@
         }
         #combinedInput {
             width: 100%; height: 45px; font-size: 22px; text-align: center;
-            margin-bottom: 5px; border: 2px solid #ccc; border-radius: 8px;
+            border: 2px solid #ccc; border-radius: 8px;
             background: #fff; box-sizing: border-box; cursor: pointer;
         }
+        /* 移除下方提示文字的 CSS 區塊 */
+
         .keypad { display: none; flex-direction: column; gap: 6px; margin-top: 10px; }
         .keypad.active { display: flex; }
         .key-row { display: flex; justify-content: space-between; gap: 6px; }
@@ -41,26 +44,23 @@
         }
         .key-btn:active { background: #ddd; transform: scale(0.95); }
         .key-btn.letter { background: #f0f7ff; color: #007bff; border-color: #b3d7ff; }
-        .key-btn.func-clear { background: #fff5f5; color: #e03131; border-color: #ffa8a8; font-size: 16px; }
-        .key-btn.func-search { background: #f4fce3; color: #2f9e44; border-color: #c0eb75; font-size: 16px; }
+        .key-btn.func-clear { background: #fff5f5; color: #e03131; border-color: #ffa8a8; }
+        .key-btn.func-search { background: #f4fce3; color: #2f9e44; border-color: #c0eb75; }
 
-        .search-container::after {
-            content: "展開/收起鍵盤";
-            display: block; font-size: 10px; color: #888; text-align: center; margin-top: 5px;
-        }
-
+        /* 重置北向按鈕樣式優化 */
         .reset-north {
             position: absolute; top: 15px; right: 15px; z-index: 1000;
             background: white; border: 2px solid #ccc; border-radius: 50%;
-            width: 44px; height: 44px; display: flex; align-items: center;
-            justify-content: center; font-size: 22px; cursor: pointer;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+            width: 46px; height: 46px; display: flex; align-items: center;
+            justify-content: center; font-size: 24px; cursor: pointer;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
         }
     </style>
 </head>
 <body>
 
 <div class="search-container">
+    <!-- 點擊輸入框會觸發開關並自動清空 -->
     <input type="text" id="combinedInput" placeholder="點擊搜尋" readonly onclick="toggleKeypad()">
     <div id="keypadSection" class="keypad">
         <div class="key-row">
@@ -84,52 +84,45 @@
 <div id="map"></div>
 <div class="reset-north" onclick="resetNorth()">🧭</div>
 
-<!-- 3. 關鍵：先載入標準版 Leaflet JS -->
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<!-- 4. 關鍵：再載入旋轉插件 JS -->
-<script src="https://unpkg.com/@runette/leaflet-rotate@0.2.0/dist/leaflet.js"></script>
-
 <script>
     // PWA 註冊
     if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
-            navigator.serviceWorker.register('sw.js').catch(err => console.log('SW Fail', err));
+            navigator.serviceWorker.register('sw.js');
         });
     }
 
-    // 初始化變數
-    let currentInput = "";
+    const imageBounds = [[22.62193, 120.34105], [22.62406, 120.34360]]; 
     let geojsonLayer = null;
+    let currentInput = "";
     let highlightMarker = null;
     let activeSpot = null;
-    const imageBounds = [[22.62193, 120.34105], [22.62406, 120.34360]]; 
 
-    // --- 初始化地圖 ---
-    // 使用支援旋轉的版本初始化
+    // --- 1. 初始化地圖 (強化旋轉配置) ---
     const map = L.map('map', {
         center: [22.6231, 120.3425],
         zoom: 18,
         maxZoom: 24,
         minZoom: 15,
-        rotate: true,             // 啟用旋轉
-        touchRotate: true,        // 支援手機雙指旋轉
-        bearing: 0                // 初始方位角
+        rotate: true,                // 啟用旋轉插件
+        touchRotate: true,           // 手機雙指旋轉
+        rotateControl: false,        // 使用自定義按鈕，不使用插件預設 UI
+        bearing: 0
     });
 
-    // 底圖
+    // --- 2. 載入底圖與 SVG ---
     L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
         opacity: 0.4,
         maxZoom: 24,
         maxNativeZoom: 19
     }).addTo(map);
 
-    // SVG 平面圖
     const svgOverlay = L.imageOverlay('B2-20250921.svg', imageBounds, {
         opacity: 0.8,
         interactive: false
     }).addTo(map);
 
-    // 載入 GeoJSON
+    // --- 3. 載入 GeoJSON ---
     fetch('weiwuying_parking.geojson')
         .then(res => res.json())
         .then(data => {
@@ -144,11 +137,9 @@
                     }
                 }
             }).addTo(map);
-            console.log("數據載入成功");
-        })
-        .catch(err => console.error("載入失敗:", err));
+        });
 
-    // 功能函數
+    // --- 4. 功能邏輯 (修正點擊清空) ---
     function appendKey(key) {
         currentInput += key;
         document.getElementById('combinedInput').value = currentInput;
@@ -161,11 +152,19 @@
     }
 
     function toggleKeypad() {
-        document.getElementById('keypadSection').classList.toggle('active');
+        const keypad = document.getElementById('keypadSection');
+        const isActive = keypad.classList.contains('active');
+        
+        // 如果鍵盤目前是收起的，點擊時先清空輸入
+        if (!isActive) {
+            clearInput();
+        }
+        
+        keypad.classList.toggle('active');
     }
 
     function resetNorth() {
-        map.setBearing(0); // 旋轉插件提供的方法
+        map.setBearing(0); // 重置為北方朝上
     }
 
     function executeSearch() {
