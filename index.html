@@ -3,13 +3,20 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-    <title>衛武營B2停車場</title>
+    <title>B2停車場</title>
     
+    <!-- 1. 先引入標準 Leaflet CSS -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <!-- 2. 再引入旋轉插件 CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/@runette/leaflet-rotate@0.2.0/dist/leaflet.css" />
+    
     <link rel="manifest" href="manifest.json">
+    <link rel="icon" href="icon.png" type="image/png">
+    <link rel="apple-touch-icon" href="icon.png">
+
     <style>
-        body { margin: 0; padding: 0; background: #eee; }
-        #map { height: 100vh; width: 100vw; }
+        body { margin: 0; padding: 0; background: #eee; overflow: hidden; }
+        #map { height: 100vh; width: 100vw; background-color: #f0f0f0; }
         
         .search-container {
             position: absolute; top: 15px; left: 15px; z-index: 1000;
@@ -22,7 +29,8 @@
             margin-bottom: 5px; border: 2px solid #ccc; border-radius: 8px;
             background: #fff; box-sizing: border-box; cursor: pointer;
         }
-        .keypad { display: flex; flex-direction: column; gap: 6px; }
+        .keypad { display: none; flex-direction: column; gap: 6px; margin-top: 10px; }
+        .keypad.active { display: flex; }
         .key-row { display: flex; justify-content: space-between; gap: 6px; }
         
         .key-btn {
@@ -30,26 +38,23 @@
             cursor: pointer; border: 1px solid #bbb; border-radius: 8px;
             background: #ffffff; color: #333;
             display: flex; align-items: center; justify-content: center;
-            transition: background 0.1s;
         }
         .key-btn:active { background: #ddd; transform: scale(0.95); }
         .key-btn.letter { background: #f0f7ff; color: #007bff; border-color: #b3d7ff; }
         .key-btn.func-clear { background: #fff5f5; color: #e03131; border-color: #ffa8a8; font-size: 16px; }
         .key-btn.func-search { background: #f4fce3; color: #2f9e44; border-color: #c0eb75; font-size: 16px; }
 
-        .leaflet-popup-content { font-size: 16px; font-weight: bold; }
-
-        #keypadSection {
-            display: none;
-            flex-direction: column;
-            gap: 6px;
-            margin-top: 10px;
-        }
-        #keypadSection.active { display: flex; }
-
         .search-container::after {
             content: "展開/收起鍵盤";
             display: block; font-size: 10px; color: #888; text-align: center; margin-top: 5px;
+        }
+
+        .reset-north {
+            position: absolute; top: 15px; right: 15px; z-index: 1000;
+            background: white; border: 2px solid #ccc; border-radius: 50%;
+            width: 44px; height: 44px; display: flex; align-items: center;
+            justify-content: center; font-size: 22px; cursor: pointer;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
         }
     </style>
 </head>
@@ -77,73 +82,73 @@
 </div>
 
 <div id="map"></div>
+<div class="reset-north" onclick="resetNorth()">🧭</div>
 
+<!-- 3. 關鍵：先載入標準版 Leaflet JS -->
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<!-- 4. 關鍵：再載入旋轉插件 JS -->
+<script src="https://unpkg.com/@runette/leaflet-rotate@0.2.0/dist/leaflet.js"></script>
 
 <script>
-    // 註冊 PWA Service Worker
+    // PWA 註冊
     if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.register('sw.js');
+        window.addEventListener('load', () => {
+            navigator.serviceWorker.register('sw.js').catch(err => console.log('SW Fail', err));
+        });
     }
 
-    // 1. 初始化地圖
+    // 初始化變數
+    let currentInput = "";
+    let geojsonLayer = null;
+    let highlightMarker = null;
+    let activeSpot = null;
+    const imageBounds = [[22.62193, 120.34105], [22.62406, 120.34360]]; 
+
+    // --- 初始化地圖 ---
+    // 使用支援旋轉的版本初始化
     const map = L.map('map', {
         center: [22.6231, 120.3425],
         zoom: 18,
         maxZoom: 24,
-        minZoom: 15
+        minZoom: 15,
+        rotate: true,             // 啟用旋轉
+        touchRotate: true,        // 支援手機雙指旋轉
+        bearing: 0                // 初始方位角
     });
 
-    // 2. 底圖圖層
+    // 底圖
     L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
         opacity: 0.4,
         maxZoom: 24,
         maxNativeZoom: 19
     }).addTo(map);
 
-    // 3. SVG 平面圖
-    const imageBounds = [[22.62193, 120.34105], [22.62406, 120.34360]]; 
-    L.imageOverlay('B2-20250921.svg', imageBounds, {
+    // SVG 平面圖
+    const svgOverlay = L.imageOverlay('B2-20250921.svg', imageBounds, {
         opacity: 0.8,
         interactive: false
     }).addTo(map);
 
-    let geojsonLayer;
-    let currentInput = "";
-
-    // 4. 載入 GeoJSON 數據
+    // 載入 GeoJSON
     fetch('weiwuying_parking.geojson')
-        .then(response => response.json())
+        .then(res => res.json())
         .then(data => {
             geojsonLayer = L.geoJSON(data, {
-                pointToLayer: function (feature, latlng) {
-                    return L.circleMarker(latlng, {
-                        radius: 3,
-                        fillColor: "#ff9800",
-                        color: "#000",
-                        weight: 1,
-                        opacity: 0.3,
-                        fillOpacity: 0.5
-                    });
-                },
-                style: function(feature) {
-                    return {
-                        "color": "#3388ff",
-                        "opacity": 0.1,
-                        "weight": 1,
-                        "fillOpacity": 0
-                    };
-                },
-                onEachFeature: function (feature, layer) {
+                pointToLayer: (feature, latlng) => L.circleMarker(latlng, {
+                    radius: 3, fillColor: "#ff9800", color: "#000", weight: 1, opacity: 0.3, fillOpacity: 0.5
+                }),
+                style: () => ({ color: "#3388ff", opacity: 0.1, weight: 1, fillOpacity: 0 }),
+                onEachFeature: (feature, layer) => {
                     if (feature.properties && feature.properties.name) {
                         layer.bindPopup("名稱: " + feature.properties.name);
                     }
                 }
             }).addTo(map);
+            console.log("數據載入成功");
         })
         .catch(err => console.error("載入失敗:", err));
 
-    // --- 鍵盤與輸入函數 ---
+    // 功能函數
     function appendKey(key) {
         currentInput += key;
         document.getElementById('combinedInput').value = currentInput;
@@ -156,23 +161,19 @@
     }
 
     function toggleKeypad() {
-        const keypad = document.getElementById('keypadSection');
-        keypad.classList.toggle('active');
+        document.getElementById('keypadSection').classList.toggle('active');
     }
 
-    function hideKeypad() {
-        const keypad = document.getElementById('keypadSection');
-        keypad.classList.remove('active');
+    function resetNorth() {
+        map.setBearing(0); // 旋轉插件提供的方法
     }
 
-    // --- 核心搜尋邏輯 ---
     function executeSearch() {
         if (!currentInput || !geojsonLayer) return;
-
-        const isPillar = /[A-E]/.test(currentInput);
+        const isPillar = /[A-E]/.test(currentInput.toUpperCase());
         let foundLayer = null;
 
-        geojsonLayer.eachLayer(function (layer) {
+        geojsonLayer.eachLayer(layer => {
             if (layer.feature.properties.name.toString().toUpperCase() === currentInput.toUpperCase()) {
                 foundLayer = layer;
             }
@@ -180,62 +181,34 @@
 
         if (foundLayer) {
             focusOnTarget(foundLayer, isPillar);
-            hideKeypad(); // 搜尋成功後收起鍵盤
+            document.getElementById('keypadSection').classList.remove('active');
         } else {
-            alert("找不到項目: " + currentInput);
+            alert("找不到: " + currentInput);
             clearInput();
         }
     }
 
     function focusOnTarget(layer, isPillar) {
         resetHighlights();
-
-        let center;
-        if (layer.getLatLng) {
-            center = layer.getLatLng();
-        } else {
-            center = layer.getBounds().getCenter();
-        }
-
+        const center = layer.getLatLng ? layer.getLatLng() : layer.getBounds().getCenter();
         map.setView(center, 22);
 
         if (isPillar) {
-            window.highlightMarker = L.circleMarker(center, {
-                radius: 25,
-                color: '#ff9800',
-                weight: 5,
-                fillColor: '#ff9800',
-                fillOpacity: 0.5
+            highlightMarker = L.circleMarker(center, {
+                radius: 25, color: '#ff9800', weight: 5, fillOpacity: 0.5
             }).addTo(map);
         } else {
-            layer.setStyle({
-                color: '#ff0000',
-                opacity: 1,
-                weight: 4,
-                fillColor: '#ffff00',
-                fillOpacity: 0.7
-            });
+            layer.setStyle({ color: '#ff0000', opacity: 1, weight: 4, fillColor: '#ffff00', fillOpacity: 0.7 });
             if (layer.bringToFront) layer.bringToFront();
-            window.activeSpot = layer;
+            activeSpot = layer;
         }
         layer.openPopup(center);
     }
 
     function resetHighlights() {
-        if (window.highlightMarker) {
-            map.removeLayer(window.highlightMarker);
-            window.highlightMarker = null;
-        }
-        if (window.activeSpot && geojsonLayer) {
-            geojsonLayer.resetStyle(window.activeSpot);
-            window.activeSpot = null;
-        }
+        if (highlightMarker) { map.removeLayer(highlightMarker); highlightMarker = null; }
+        if (activeSpot && geojsonLayer) { geojsonLayer.resetStyle(activeSpot); activeSpot = null; }
     }
-
-    // 除錯工具
-    map.on('click', function(e) {
-        console.log(`"coords": [${e.latlng.lng.toFixed(5)}, ${e.latlng.lat.toFixed(5)}]`);
-    });
 </script>
 </body>
 </html>
