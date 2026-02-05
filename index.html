@@ -16,8 +16,11 @@
     <link rel="apple-touch-icon" href="icon.png">
 
     <style>
-        body { margin: 0; padding: 0; background: #eee; overflow: hidden; touch-action: none; }
-        #map { height: 100vh; width: 100vw; background-color: #f0f0f0; }
+        body { margin: 0; padding: 0; background: #eee; overflow: hidden; }
+        #map { 
+            height: 100vh; width: 100vw; background-color: #f0f0f0; 
+            touch-action: none; /* 禁用瀏覽器預設手勢，交給 Leaflet 處理 */
+        }
         
         .search-container {
             position: absolute; top: 15px; left: 15px; z-index: 1000;
@@ -30,7 +33,6 @@
             border: 2px solid #ccc; border-radius: 8px;
             background: #fff; box-sizing: border-box; cursor: pointer;
         }
-        /* 移除下方提示文字的 CSS 區塊 */
 
         .keypad { display: none; flex-direction: column; gap: 6px; margin-top: 10px; }
         .keypad.active { display: flex; }
@@ -47,20 +49,24 @@
         .key-btn.func-clear { background: #fff5f5; color: #e03131; border-color: #ffa8a8; }
         .key-btn.func-search { background: #f4fce3; color: #2f9e44; border-color: #c0eb75; }
 
-        /* 重置北向按鈕樣式優化 */
-        .reset-north {
+        /* 右側控制面板 (含旋轉與北向) */
+        .control-panel {
             position: absolute; top: 15px; right: 15px; z-index: 1000;
+            display: flex; flex-direction: column; gap: 10px;
+        }
+
+        .side-btn {
             background: white; border: 2px solid #ccc; border-radius: 50%;
-            width: 46px; height: 46px; display: flex; align-items: center;
-            justify-content: center; font-size: 24px; cursor: pointer;
+            width: 48px; height: 48px; display: flex; align-items: center;
+            justify-content: center; font-size: 22px; cursor: pointer;
             box-shadow: 0 2px 8px rgba(0,0,0,0.2);
         }
+        .side-btn:active { background: #f0f0f0; }
     </style>
 </head>
 <body>
 
 <div class="search-container">
-    <!-- 點擊輸入框會觸發開關並自動清空 -->
     <input type="text" id="combinedInput" placeholder="點擊搜尋" readonly onclick="toggleKeypad()">
     <div id="keypadSection" class="keypad">
         <div class="key-row">
@@ -81,11 +87,16 @@
     </div>
 </div>
 
+<!-- 右側控制面板：包含手動旋轉功能 -->
+<div class="control-panel">
+    <div class="side-btn" onclick="resetNorth()" title="重置北向">🧭</div>
+    <div class="side-btn" onclick="rotateMap(-45)" title="向左轉">↩️</div>
+    <div class="side-btn" onclick="rotateMap(45)" title="向右轉">↪️</div>
+</div>
+
 <div id="map"></div>
-<div class="reset-north" onclick="resetNorth()">🧭</div>
 
 <script>
-    // PWA 註冊
     if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
             navigator.serviceWorker.register('sw.js');
@@ -104,25 +115,20 @@
         zoom: 18,
         maxZoom: 24,
         minZoom: 15,
-        rotate: true,                // 啟用旋轉插件
-        touchRotate: true,           // 手機雙指旋轉
-        rotateControl: false,        // 使用自定義按鈕，不使用插件預設 UI
+        rotate: true,                
+        touchRotate: true,           
         bearing: 0
     });
 
-    // --- 2. 載入底圖與 SVG ---
+    // --- 2. 載入圖層 ---
     L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
-        opacity: 0.4,
-        maxZoom: 24,
-        maxNativeZoom: 19
+        opacity: 0.4, maxZoom: 24, maxNativeZoom: 19
     }).addTo(map);
 
     const svgOverlay = L.imageOverlay('B2-20250921.svg', imageBounds, {
-        opacity: 0.8,
-        interactive: false
+        opacity: 0.8, interactive: false
     }).addTo(map);
 
-    // --- 3. 載入 GeoJSON ---
     fetch('weiwuying_parking.geojson')
         .then(res => res.json())
         .then(data => {
@@ -139,7 +145,7 @@
             }).addTo(map);
         });
 
-    // --- 4. 功能邏輯 (修正點擊清空) ---
+    // --- 3. 修改後的鍵盤邏輯 (點擊即清空) ---
     function appendKey(key) {
         currentInput += key;
         document.getElementById('combinedInput').value = currentInput;
@@ -153,18 +159,20 @@
 
     function toggleKeypad() {
         const keypad = document.getElementById('keypadSection');
-        const isActive = keypad.classList.contains('active');
-        
-        // 如果鍵盤目前是收起的，點擊時先清空輸入
-        if (!isActive) {
-            clearInput();
-        }
-        
+        // 核心邏輯：只要點擊輸入框，無論是展開還是收起，都清空舊內容
+        clearInput();
         keypad.classList.toggle('active');
     }
 
+    // --- 4. 旋轉邏輯 ---
     function resetNorth() {
-        map.setBearing(0); // 重置為北方朝上
+        map.setBearing(0);
+    }
+
+    // 手動旋轉函數：確保沒辦法雙指旋轉時也能運作
+    function rotateMap(angle) {
+        const currentBearing = map.getBearing() || 0;
+        map.setBearing(currentBearing + angle);
     }
 
     function executeSearch() {
