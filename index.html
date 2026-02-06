@@ -6,10 +6,8 @@
     <meta name="theme-color" content="#f0f0f0">
     <title>B2停車場</title>
     
-    <!-- 引入標準穩定版 Leaflet -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    
     <link rel="manifest" href="manifest.json">
     <link rel="icon" href="icon.png" type="image/png">
     <link rel="apple-touch-icon" href="icon.png">
@@ -18,33 +16,36 @@
         body { margin: 0; padding: 0; background: #eee; overflow: hidden; }
         #map { height: 100vh; width: 100vw; background-color: #f0f0f0; }
         
-        /* 搜尋容器 */
         .search-container {
             position: absolute; top: 15px; left: 15px; z-index: 1000;
             background: rgba(255, 255, 255, 0.95); padding: 12px; border-radius: 12px;
             box-shadow: 0 4px 15px rgba(0,0,0,0.25); width: 260px;
             font-family: sans-serif;
         }
+        #routeStatus {
+            font-size: 14px; color: #d63031; font-weight: bold; 
+            margin-bottom: 8px; text-align: center; display: none;
+            background: #fff5f5; padding: 8px; border-radius: 5px;
+            border: 1px solid #fab1a0;
+        }
         #combinedInput {
             width: 100%; height: 45px; font-size: 22px; text-align: center;
             border: 2px solid #ccc; border-radius: 8px;
             background: #fff; box-sizing: border-box; cursor: pointer;
         }
-
         .keypad { display: none; flex-direction: column; gap: 6px; margin-top: 10px; }
         .keypad.active { display: flex; }
         .key-row { display: flex; justify-content: space-between; gap: 6px; }
-        
         .key-btn {
             flex: 1; height: 55px; font-size: 18px; font-weight: bold;
             cursor: pointer; border: 1px solid #bbb; border-radius: 8px;
-            background: #ffffff; color: #333;
-            display: flex; align-items: center; justify-content: center;
+            background: #ffffff; color: #333; display: flex; align-items: center; justify-content: center;
         }
         .key-btn:active { background: #ddd; transform: scale(0.95); }
         .key-btn.letter { background: #f0f7ff; color: #007bff; border-color: #b3d7ff; }
         .key-btn.func-clear { background: #fff5f5; color: #e03131; border-color: #ffa8a8; }
         .key-btn.func-search { background: #f4fce3; color: #2f9e44; border-color: #c0eb75; }
+        .key-btn.nav-btn { font-size: 14px; border: 2px solid #bbb; }
 
         .leaflet-popup-content { font-size: 16px; font-weight: bold; }
     </style>
@@ -52,7 +53,9 @@
 <body>
 
 <div class="search-container">
-    <!-- 點擊即清空並切換鍵盤 -->
+    <div id="routeStatus">
+        <span id="txtFrom"></span> ➔ <span id="txtTo"></span>
+    </div>
     <input type="text" id="combinedInput" placeholder="點擊搜尋" readonly onclick="toggleKeypad()">
     <div id="keypadSection" class="keypad">
         <div class="key-row">
@@ -70,133 +73,202 @@
             <button class="key-btn" onclick="appendKey('0')">0</button>
             <button class="key-btn func-search" onclick="executeSearch()">搜尋</button>
         </div>
+        <div class="key-row" style="margin-top: 5px;">
+            <button class="key-btn nav-btn" style="background-color: #ffeaa7;" onclick="setPoint('from')">設為起點</button>
+            <button class="key-btn nav-btn" style="background-color: #fab1a0;" onclick="setPoint('to')">設為目標</button>
+        </div>
     </div>
 </div>
 
 <div id="map"></div>
 
 <script>
-    // PWA Service Worker 註冊
     if ('serviceWorker' in navigator) {
-        window.addEventListener('load', () => {
-            navigator.serviceWorker.register('sw.js');
-        });
+        window.addEventListener('load', () => { navigator.serviceWorker.register('sw.js'); });
     }
 
-    // 基礎參數
-    const imageBounds = [[22.62193, 120.34105], [22.62406, 120.34360]]; 
-    let geojsonLayer = null;
-    let currentInput = "";
-    let highlightMarker = null;
-    let activeSpot = null;
+    // --- 1. 資料與基礎參數定義 ---
+    const imageBounds = [[22.62193, 120.34105], [22.62406, 120.34360]];
+    const roadNetwork = {
+        "nodes": {
+            "A1": [120.34124, 22.62270], "A3": [120.34137, 22.62307], "A4": [120.34149, 22.62344], "A5": [120.34164, 22.62391],
+            "B1": [120.34175, 22.62254], "B3": [120.34188, 22.62290], "B4": [120.34200, 22.62327], "B5": [120.34216, 22.62374],
+            "C1": [120.34250, 22.62227], "C2": [120.34256, 22.62244], "C3": [120.34263, 22.62266], "C4": [120.34275, 22.62301], "C5": [120.34291, 22.62348],
+            "D1": [120.34308, 22.62208], "D2": [120.34313, 22.62225], "D4": [120.34332, 22.62282], "D5": [120.34347, 22.62329]
+        },
+        "edges": [
+            ["A1","A3"], ["A3","A4"], ["A4","A5"], ["B1","B3"], ["B3","B4"], ["B4","B5"],
+            ["C1","C2"], ["C2","C3"], ["C3","C4"], ["C4","C5"], ["D1","D2"], ["D2","D4"], ["D4","D5"],
+            ["A1","B1"], ["B1","C1"], ["C1","D1"], ["C2","D2"], ["A3","B3"], ["B3","C3"],
+            ["A4","B4"], ["C4","D4"], ["A5","B5"], ["B5","C5"], ["C5","D5"]
+        ]
+    };
 
-    // 1. 初始化地圖 (回歸標準模式)
-    const map = L.map('map', {
-        center: [22.6231, 120.3425],
-        zoom: 18,
-        maxZoom: 24,
-        minZoom: 15,
-        zoomControl: false // 手機版建議關閉 +/- 按鈕，讓畫面更乾淨
+    // 自定義大旗子標記
+    const redFlagIcon = L.divIcon({
+        html: '<div style="font-size: 40px; filter: drop-shadow(2px 2px 2px rgba(0,0,0,0.3)); line-height: 1;">🚩</div>',
+        className: '',
+        iconSize: [48, 48],
+        iconAnchor: [12, 42] // 修正錨點，讓旗桿尖端對準坐標
     });
 
-    // 2. 載入底圖
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
-        opacity: 0.4,
-        maxZoom: 24,
-        maxNativeZoom: 19
-    }).addTo(map);
+    let geojsonLayer, currentInput = "", activeSpot = null;
+    let startData = null, endData = null, routeLine = null, startMarker = null, endMarker = null;
 
-    // 3. 載入 SVG 平面圖
-    const svgOverlay = L.imageOverlay('B2-20250921.svg', imageBounds, {
-        opacity: 0.8,
-        interactive: false
-    }).addTo(map);
+    // --- 2. 初始化地圖 ---
+    const map = L.map('map', { center: [22.6231, 120.3425], zoom: 18, maxZoom: 24, minZoom: 15, zoomControl: false });
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', { opacity: 0.4, maxZoom: 24, maxNativeZoom: 19 }).addTo(map);
+    L.imageOverlay('B2-20250921.svg', imageBounds, { opacity: 0.8, interactive: false }).addTo(map);
 
-    // 4. 載入 GeoJSON 數據
-    fetch('parking.geojson')
-        .then(res => res.json())
-        .then(data => {
-            geojsonLayer = L.geoJSON(data, {
-                pointToLayer: (feature, latlng) => L.circleMarker(latlng, {
-                    radius: 3, fillColor: "#ff9800", color: "#000", weight: 1, opacity: 0.3, fillOpacity: 0.5
-                }),
-                style: () => ({ color: "#3388ff", opacity: 0.1, weight: 1, fillOpacity: 0 }),
-                onEachFeature: (feature, layer) => {
-                    if (feature.properties && feature.properties.name) {
-                        layer.bindPopup("名稱: " + feature.properties.name);
-                    }
+    fetch('parking.geojson').then(res => res.json()).then(data => {
+        geojsonLayer = L.geoJSON(data, {
+            pointToLayer: (f, l) => L.circleMarker(l, { radius: 3, fillColor: "#ff9800", color: "#000", weight: 1, opacity: 0.3, fillOpacity: 0.5 }),
+            style: () => ({ color: "#3388ff", opacity: 0.1, weight: 1, fillOpacity: 0 }),
+            onEachFeature: (f, layer) => layer.bindPopup("名稱: " + f.properties.name)
+        }).addTo(map);
+    });
+
+    // --- 3. 核心導航演算法 (Dijkstra + 投影優化) ---
+    function buildGraph() {
+        const graph = {};
+        for (let id in roadNetwork.nodes) graph[id] = {};
+        roadNetwork.edges.forEach(([u, v]) => {
+            const d = Math.sqrt(Math.pow(roadNetwork.nodes[u][0]-roadNetwork.nodes[v][0],2) + Math.pow(roadNetwork.nodes[u][1]-roadNetwork.nodes[v][1],2));
+            graph[u][v] = d; graph[v][u] = d;
+        });
+        return graph;
+    }
+
+    function dijkstra(start, end) {
+        const graph = buildGraph();
+        const dists = {}, prevs = {}, pq = new Set(Object.keys(graph));
+        Object.keys(graph).forEach(n => dists[n] = Infinity);
+        dists[start] = 0;
+        while(pq.size) {
+            let u = Array.from(pq).reduce((a, b) => dists[a] < dists[b] ? a : b);
+            if (u === end || dists[u] === Infinity) break;
+            pq.delete(u);
+            for (let v in graph[u]) {
+                let alt = dists[u] + graph[u][v];
+                if (alt < dists[v]) { dists[v] = alt; prevs[v] = u; }
+            }
+        }
+        const path = []; let curr = end;
+        while(curr) { path.unshift(curr); curr = prevs[curr]; }
+        return path;
+    }
+
+    function getProjectionPoint(P, A, B) {
+        const x1 = A[0], y1 = A[1], x2 = B[0], y2 = B[1], px = P.lng, py = P.lat;
+        const dx = x2 - x1, dy = y2 - y1;
+        if (dx === 0 && dy === 0) return A;
+        let t = ((px - x1) * dx + (py - y1) * dy) / (dx * dx + dy * dy);
+        t = Math.max(0, Math.min(1, t)); 
+        return [x1 + t * dx, y1 + t * dy];
+    }
+
+    function getNearestPathInfo(latlng) {
+        let minDistance = Infinity, bestInfo = null;
+        roadNetwork.edges.forEach(([idA, idB]) => {
+            const A = roadNetwork.nodes[idA], B = roadNetwork.nodes[idB];
+            const proj = getProjectionPoint(latlng, A, B);
+            const d = Math.sqrt(Math.pow(latlng.lng - proj[0], 2) + Math.pow(latlng.lat - proj[1], 2));
+            if (d < minDistance) {
+                minDistance = d;
+                bestInfo = { projPoint: proj, nodes: [idA, idB] };
+            }
+        });
+        return bestInfo;
+    }
+
+    function drawRoute() {
+        if (routeLine) map.removeLayer(routeLine);
+        const startInfo = getNearestPathInfo(startData.pos);
+        const endInfo = getNearestPathInfo(endData.pos);
+        if (!startInfo || !endInfo) return;
+
+        let shortestRoute = null, minTotalNodes = Infinity;
+
+        // 判斷順路組合，避免掉頭
+        startInfo.nodes.forEach(sNode => {
+            endInfo.nodes.forEach(eNode => {
+                const pathNodes = dijkstra(sNode, eNode);
+                if (pathNodes.length < minTotalNodes) {
+                    minTotalNodes = pathNodes.length;
+                    shortestRoute = pathNodes;
                 }
-            }).addTo(map);
+            });
         });
 
-    // --- 鍵盤與搜尋邏輯 ---
-    function appendKey(key) {
-        currentInput += key;
-        document.getElementById('combinedInput').value = currentInput;
+        let finalPath = [[startData.pos.lat, startData.pos.lng]];
+        finalPath.push([startInfo.projPoint[1], startInfo.projPoint[0]]);
+        shortestRoute.forEach(id => finalPath.push([roadNetwork.nodes[id][1], roadNetwork.nodes[id][0]]));
+        finalPath.push([endInfo.projPoint[1], endInfo.projPoint[0]]);
+        finalPath.push([endData.pos.lat, endData.pos.lng]);
+
+        routeLine = L.polyline(finalPath, { color: '#ff4757', weight: 8, opacity: 0.8, dashArray: '10, 15', lineJoin: 'round' }).addTo(map);
+        map.fitBounds(routeLine.getBounds(), { padding: [80, 80] });
     }
 
-    function clearInput() {
-        currentInput = "";
-        document.getElementById('combinedInput').value = "";
-        resetHighlights();
+    // --- 4. UI 功能函數 ---
+    function appendKey(k) { currentInput += k; document.getElementById('combinedInput').value = currentInput; }
+    function clearInput() { 
+        currentInput = ""; 
+        document.getElementById('combinedInput').value = ""; 
+        if (activeSpot) geojsonLayer.resetStyle(activeSpot);
+        if (routeLine) { 
+            map.removeLayer(routeLine); map.removeLayer(startMarker); map.removeLayer(endMarker);
+            startData = null; endData = null; routeLine = null; startMarker = null; endMarker = null;
+            document.getElementById('routeStatus').style.display = "none";
+        }
     }
+    function toggleKeypad() { clearInput(); document.getElementById('keypadSection').classList.toggle('active'); }
 
-    function toggleKeypad() {
-        // 點擊輸入框時自動清除內容，並展開鍵盤
-        clearInput();
-        document.getElementById('keypadSection').classList.toggle('active');
+    function setPoint(type) {
+        if (!currentInput || !geojsonLayer) return;
+        let target = null;
+        geojsonLayer.eachLayer(l => { if (l.feature.properties.name.toString().toUpperCase() === currentInput.toUpperCase()) target = l; });
+        if (!target) return alert("找不到編號: " + currentInput);
+
+        const pos = target.getLatLng ? target.getLatLng() : target.getBounds().getCenter();
+        if (type === 'from') {
+            startData = { name: currentInput, pos: pos };
+            document.getElementById('txtFrom').innerText = "起點: " + currentInput;
+            if (startMarker) map.removeLayer(startMarker);
+            startMarker = L.circleMarker(pos, { radius: 10, color: '#0984e3', fillColor: '#0984e3', fillOpacity: 1 }).addTo(map);
+        } else {
+            endData = { name: currentInput, pos: pos };
+            document.getElementById('txtTo').innerText = "目標: " + currentInput;
+            if (endMarker) map.removeLayer(endMarker);
+            endMarker = L.marker(pos, { icon: redFlagIcon }).addTo(map);
+        }
+
+        document.getElementById('routeStatus').style.display = "block";
+        if (startData && endData) { 
+            drawRoute(); 
+            document.getElementById('keypadSection').classList.remove('active'); 
+        } else { 
+            currentInput = ""; 
+            document.getElementById('combinedInput').value = ""; 
+        }
     }
 
     function executeSearch() {
         if (!currentInput || !geojsonLayer) return;
-        const isPillar = /[A-E]/.test(currentInput.toUpperCase());
-        let foundLayer = null;
-
-        geojsonLayer.eachLayer(layer => {
-            if (layer.feature.properties.name.toString().toUpperCase() === currentInput.toUpperCase()) {
-                foundLayer = layer;
+        geojsonLayer.eachLayer(l => {
+            if (l.feature.properties.name.toString().toUpperCase() === currentInput.toUpperCase()) {
+                const pos = l.getLatLng ? l.getLatLng() : l.getBounds().getCenter();
+                map.setView(pos, 21);
+                l.setStyle({ color: '#ff0000', opacity: 1, weight: 4, fillColor: '#ffff00', fillOpacity: 0.7 });
+                l.openPopup();
+                activeSpot = l;
+                document.getElementById('keypadSection').classList.remove('active');
             }
         });
-
-        if (foundLayer) {
-            focusOnTarget(foundLayer, isPillar);
-            document.getElementById('keypadSection').classList.remove('active');
-        } else {
-            alert("找不到項目: " + currentInput);
-            clearInput();
-        }
     }
 
-    function focusOnTarget(layer, isPillar) {
-        resetHighlights();
-        const center = layer.getLatLng ? layer.getLatLng() : layer.getBounds().getCenter();
-        
-        // 移動並放大地圖
-        map.setView(center, 22);
-
-        if (isPillar) {
-            highlightMarker = L.circleMarker(center, {
-                radius: 25, color: '#ff9800', weight: 5, fillOpacity: 0.5
-            }).addTo(map);
-        } else {
-            layer.setStyle({ color: '#ff0000', opacity: 1, weight: 4, fillColor: '#ffff00', fillOpacity: 0.7 });
-            if (layer.bringToFront) layer.bringToFront();
-            activeSpot = layer;
-        }
-        layer.openPopup(center);
-    }
-
-    function resetHighlights() {
-        if (highlightMarker) { map.removeLayer(highlightMarker); highlightMarker = null; }
-        if (activeSpot && geojsonLayer) { geojsonLayer.resetStyle(activeSpot); activeSpot = null; }
-    }
-
-    // 點擊座標除錯工具 (僅在開發檢查時有用)
-    map.on('click', e => {
-        console.log(`"coords": [${e.latlng.lng.toFixed(5)}, ${e.latlng.lat.toFixed(5)}]`);
-    });
+    // 除錯工具
+    map.on('click', e => { console.log(`"coords": [${e.latlng.lng.toFixed(5)}, ${e.latlng.lat.toFixed(5)}]`); });
 </script>
 </body>
-
 </html>
-
