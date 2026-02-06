@@ -113,7 +113,7 @@
     }).addTo(map);
 
     // 4. 載入 GeoJSON 數據
-    fetch('weiwuying_parking.geojson')
+    fetch('parking.geojson')
         .then(res => res.json())
         .then(data => {
             geojsonLayer = L.geoJSON(data, {
@@ -199,3 +199,4 @@
 </body>
 
 </html>
+
