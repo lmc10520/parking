@@ -1,4 +1,4 @@
-const CACHE_NAME = 'weiwuying-parking-v2';
+const CACHE_NAME = 'weiwuying-parking-v3';
 const ASSETS = [
   './',               // 首頁
   './index.html',     
@@ -41,4 +41,5 @@ self.addEventListener('fetch', (event) => {
       return response || fetch(event.request);
     })
   );
+
 });
