@@ -19,7 +19,7 @@
         .search-container {
             position: absolute; top: 12px; left: 12px; z-index: 1000;
             background: rgba(255, 255, 255, 0.95); padding: 10px; border-radius: 12px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.2); width: 280px; /* 稍微加寬以容納直列字母 */
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2); width: 260px;
             font-family: sans-serif;
         }
         #routeStatus {
@@ -30,21 +30,13 @@
         #combinedInput {
             width: 100%; height: 42px; font-size: 20px; text-align: center;
             border: 2px solid #ccc; border-radius: 8px;
-            background: #fff; box-sizing: border-box; cursor: pointer;
-            margin-bottom: 8px;
+            background: #fff; box-sizing: border-box; cursor: pointer; margin-bottom: 8px;
         }
-        
-        /* 鍵盤容器設定 */
         .keypad { display: none; flex-direction: row; gap: 8px; }
         .keypad.active { display: flex; }
-        
-        /* 左側字母直列 */
         .keypad-letters { display: flex; flex-direction: column; gap: 5px; flex: 0.8; }
-        
-        /* 右側數字與功能區 */
         .keypad-main { display: flex; flex-direction: column; gap: 5px; flex: 3; }
         .key-row { display: flex; justify-content: space-between; gap: 5px; }
-        
         .key-btn {
             flex: 1; height: 44px; font-size: 16px; font-weight: bold;
             cursor: pointer; border: 1px solid #bbb; border-radius: 6px;
@@ -52,18 +44,16 @@
         }
         .key-btn:active { background: #ddd; transform: scale(0.95); }
 
-        /* 場館色碼 */
+        /* 衛武營場館色 */
         .btn-a { background-color: #DABE00 !important; color: white; border: none; }
         .btn-b { background-color: #E98B19 !important; color: white; border: none; }
         .btn-c { background-color: #E50012 !important; color: white; border: none; }
         .btn-d { background-color: #0072BE !important; color: white; border: none; }
         .btn-e { background-color: #2B8D56 !important; color: white; border: none; }
 
-        .key-btn.func-clear { background: #fff5f5; color: #e03131; border-color: #ffa8a8; font-size: 14px; }
-        .key-btn.func-search { background: #f4fce3; color: #2f9e44; border-color: #c0eb75; font-size: 14px; }
+        .key-btn.func-clear { background: #fff5f5; color: #e03131; border-color: #ffa8a8; }
+        .key-btn.func-search { background: #f4fce3; color: #2f9e44; border-color: #c0eb75; }
         .key-btn.nav-point { background-color: #f1f2f6; font-size: 14px; border: 2px solid #ced4da; }
-
-        .leaflet-popup-content { font-size: 15px; font-weight: bold; }
     </style>
 </head>
 <body>
@@ -71,9 +61,7 @@
 <div class="search-container">
     <div id="routeStatus"></div>
     <input type="text" id="combinedInput" placeholder="點擊搜尋/導航" readonly onclick="toggleKeypad()">
-    
     <div id="keypadSection" class="keypad">
-        <!-- 左側：A-E 字母直列 -->
         <div class="keypad-letters">
             <button class="key-btn btn-a" onclick="appendKey('A')">A</button>
             <button class="key-btn btn-b" onclick="appendKey('B')">B</button>
@@ -81,32 +69,18 @@
             <button class="key-btn btn-d" onclick="appendKey('D')">D</button>
             <button class="key-btn btn-e" onclick="appendKey('E')">E</button>
         </div>
-        
-        <!-- 右側：九宮格與導航 -->
         <div class="keypad-main">
-            <div class="key-row">
-                <button class="key-btn" onclick="appendKey('1')">1</button>
-                <button class="key-btn" onclick="appendKey('2')">2</button>
-                <button class="key-btn" onclick="appendKey('3')">3</button>
-            </div>
-            <div class="key-row">
-                <button class="key-btn" onclick="appendKey('4')">4</button>
-                <button class="key-btn" onclick="appendKey('5')">5</button>
-                <button class="key-btn" onclick="appendKey('6')">6</button>
-            </div>
-            <div class="key-row">
-                <button class="key-btn" onclick="appendKey('7')">7</button>
-                <button class="key-btn" onclick="appendKey('8')">8</button>
-                <button class="key-btn" onclick="appendKey('9')">9</button>
-            </div>
+            <div class="key-row"><button class="key-btn" onclick="appendKey('1')">1</button><button class="key-btn" onclick="appendKey('2')">2</button><button class="key-btn" onclick="appendKey('3')">3</button></div>
+            <div class="key-row"><button class="key-btn" onclick="appendKey('4')">4</button><button class="key-btn" onclick="appendKey('5')">5</button><button class="key-btn" onclick="appendKey('6')">6</button></div>
+            <div class="key-row"><button class="key-btn" onclick="appendKey('7')">7</button><button class="key-btn" onclick="appendKey('8')">8</button><button class="key-btn" onclick="appendKey('9')">9</button></div>
             <div class="key-row">
                 <button class="key-btn func-clear" onclick="clearInput()">清除</button>
                 <button class="key-btn" onclick="appendKey('0')">0</button>
                 <button class="key-btn func-search" onclick="executeSearch()">搜尋</button>
             </div>
             <div class="key-row">
-                <button class="key-btn nav-point" style="color:#0984e3; flex: 1;" onclick="setPoint('from')">設為起點</button>
-                <button class="key-btn nav-point" style="color:#d63031; flex: 1;" onclick="setPoint('to')">設為目標</button>
+                <button class="key-btn nav-point" style="color:#0984e3" onclick="setPoint('from')">設為起點</button>
+                <button class="key-btn nav-point" style="color:#d63031" onclick="setPoint('to')">設為目標</button>
             </div>
         </div>
     </div>
@@ -119,7 +93,7 @@
         window.addEventListener('load', () => { navigator.serviceWorker.register('sw.js'); });
     }
 
-    // --- 資料與基礎參數 ---
+    // --- 資料定義 ---
     const imageBounds = [[22.62193, 120.34105], [22.62406, 120.34360]];
     const roadNetwork = {
         "nodes": {
@@ -156,38 +130,48 @@
         }).addTo(map);
     });
 
-    // --- 輔助：自動補 0 邏輯 ---
+    // --- 關鍵優化：距離計算與導航邏輯 ---
+
+    // 格式化輸入：柱號自動補 0
     function formatInput(val) {
         val = val.toUpperCase();
+        // 判斷是否為 1字母 + 1數字 (如 A1)
         if (val.length === 2 && /[A-E]/.test(val[0]) && /\d/.test(val[1])) {
             return val[0] + '0' + val[1];
         }
         return val;
     }
 
-    // --- 導航核心 (含轉彎優化) ---
-    function getAngle(p1, p2) { return Math.atan2(p2[1] - p1[1], p2[0] - p1[0]) * 180 / Math.PI; }
+    // 計算真實座標距離 (歐幾里德距離)
+    function calcDist(p1, p2) {
+        return Math.sqrt(Math.pow(p1[0] - p2[0], 2) + Math.pow(p1[1] - p2[1], 2));
+    }
 
-    function dijkstra(start, end) {
+    function buildGraph() {
         const graph = {};
         for (let id in roadNetwork.nodes) graph[id] = {};
         roadNetwork.edges.forEach(([u, v]) => {
-            const d = Math.sqrt(Math.pow(roadNetwork.nodes[u][0]-roadNetwork.nodes[v][0],2) + Math.pow(roadNetwork.nodes[u][1]-roadNetwork.nodes[v][1],2));
+            const d = calcDist(roadNetwork.nodes[u], roadNetwork.nodes[v]);
             graph[u][v] = d; graph[v][u] = d;
         });
-        const dists = {}, prevs = {}, pq = new Set(Object.keys(graph)), arrivalAngle = {};
-        Object.keys(graph).forEach(n => { dists[n] = Infinity; arrivalAngle[n] = null; });
+        return graph;
+    }
+
+    // Dijkstra：純距離優先，不加轉彎懲罰，確保最短路徑
+    function dijkstra(start, end) {
+        const graph = buildGraph();
+        const dists = {}, prevs = {}, pq = new Set(Object.keys(graph));
+        Object.keys(graph).forEach(n => dists[n] = Infinity);
         dists[start] = 0;
+
         while(pq.size) {
             let u = Array.from(pq).reduce((a, b) => dists[a] < dists[b] ? a : b);
             if (u === end || dists[u] === Infinity) break;
             pq.delete(u);
+
             for (let v in graph[u]) {
-                const edgeDist = graph[u][v];
-                const currentAngle = getAngle(roadNetwork.nodes[u], roadNetwork.nodes[v]);
-                let penalty = (arrivalAngle[u] !== null && Math.abs(currentAngle - arrivalAngle[u]) > 30) ? 0.5 : 0;
-                let alt = dists[u] + edgeDist + penalty;
-                if (alt < dists[v]) { dists[v] = alt; prevs[v] = u; arrivalAngle[v] = currentAngle; }
+                let alt = dists[u] + graph[u][v];
+                if (alt < dists[v]) { dists[v] = alt; prevs[v] = u; }
             }
         }
         const path = []; let curr = end;
@@ -206,7 +190,7 @@
         let minD = Infinity, best = null;
         roadNetwork.edges.forEach(([u, v]) => {
             const proj = getProjectionPoint(latlng, roadNetwork.nodes[u], roadNetwork.nodes[v]);
-            const d = Math.sqrt(Math.pow(latlng.lng - proj[0], 2) + Math.pow(latlng.lat - proj[1], 2));
+            const d = calcDist([latlng.lng, latlng.lat], proj);
             if (d < minD) { minD = d; best = { proj, nodes: [u, v] }; }
         });
         return best;
@@ -216,16 +200,34 @@
         if (routeLine) map.removeLayer(routeLine);
         const sInfo = getNearestPathInfo(startData.pos), eInfo = getNearestPathInfo(endData.pos);
         if (!sInfo || !eInfo) return;
-        let bestPath = null, minC = Infinity;
-        sInfo.nodes.forEach(s => eInfo.nodes.forEach(e => {
-            const p = dijkstra(s, e);
-            if (p.length < minC) { minC = p.length; bestPath = p; }
-        }));
+
+        let bestPath = null, minTotalDist = Infinity;
+        
+        // 同時嘗試起點與終點所在路段的四個端點組合，找出真正的最短距離
+        sInfo.nodes.forEach(s => {
+            eInfo.nodes.forEach(e => {
+                const path = dijkstra(s, e);
+                // 計算此路徑的總物理長度
+                let totalDist = calcDist([startData.pos.lng, startData.pos.lat], sInfo.proj);
+                for(let i=0; i<path.length-1; i++) {
+                    totalDist += calcDist(roadNetwork.nodes[path[i]], roadNetwork.nodes[path[i+1]]);
+                }
+                totalDist += calcDist(eInfo.proj, [endData.pos.lng, endData.pos.lat]);
+
+                if (totalDist < minTotalDist) {
+                    minTotalDist = totalDist;
+                    bestPath = path;
+                }
+            });
+        });
+
         let final = [[startData.pos.lat, startData.pos.lng], [sInfo.proj[1], sInfo.proj[0]]];
         bestPath.forEach(id => final.push([roadNetwork.nodes[id][1], roadNetwork.nodes[id][0]]));
         final.push([eInfo.proj[1], eInfo.proj[0]], [endData.pos.lat, endData.pos.lng]);
-        routeLine = L.polyline(final, { color: '#ff4757', weight: 8, opacity: 0.8, dashArray: '8, 12' }).addTo(map);
-        map.fitBounds(routeLine.getBounds(), { padding: [60, 60] });
+
+        routeLine = L.polyline(final, { color: '#ff4757', weight: 8, opacity: 0.8, dashArray: '8, 12', lineJoin: 'round' }).addTo(map);
+        map.fitBounds(routeLine.getBounds(), { padding: [80, 80] });
+
         document.getElementById('routeStatus').style.display = "block";
         document.getElementById('routeStatus').innerHTML = `${startData.name} ➔ ${endData.name}`;
     }
@@ -252,13 +254,13 @@
 
     function toggleKeypad() {
         const keypad = document.getElementById('keypadSection');
-        if (!keypad.classList.contains('active')) clearInput(true); // 開啟即清空
+        if (!keypad.classList.contains('active')) clearInput(true);
         keypad.classList.toggle('active');
     }
 
     function setPoint(type) {
         if (!currentInput || !geojsonLayer) return;
-        const targetName = formatInput(currentInput);
+        const targetName = formatInput(currentInput); // 自動補 0 處理
         let target = null;
         geojsonLayer.eachLayer(l => { if (l.feature.properties.name.toString().toUpperCase() === targetName) target = l; });
         if (!target) return alert("找不到編號: " + targetName);
@@ -273,13 +275,14 @@
             if (endMarker) map.removeLayer(endMarker);
             endMarker = L.marker(pos, { icon: redFlagIcon }).addTo(map);
         }
+
         if (startData && endData) { drawRoute(); document.getElementById('keypadSection').classList.remove('active'); }
         else { currentInput = ""; document.getElementById('combinedInput').value = ""; }
     }
 
     function executeSearch() {
         if (!currentInput || !geojsonLayer) return;
-        const targetName = formatInput(currentInput);
+        const targetName = formatInput(currentInput); // 自動補 0 處理
         geojsonLayer.eachLayer(l => {
             if (l.feature.properties.name.toString().toUpperCase() === targetName) {
                 const pos = l.getLatLng ? l.getLatLng() : l.getBounds().getCenter();
@@ -290,6 +293,8 @@
             }
         });
     }
+
+    map.on('click', e => { console.log(`"coords": [${e.latlng.lng.toFixed(5)}, ${e.latlng.lat.toFixed(5)}]`); });
 </script>
 </body>
 </html>
