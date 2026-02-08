@@ -74,7 +74,7 @@
 
 <div class="search-container">
     <div id="routeStatus"></div>
-    <input type="text" id="combinedInput" placeholder="點擊開始" readonly onclick="toggleKeypad()">
+    <input type="text" id="combinedInput" placeholder="點擊搜尋/導航" readonly onclick="toggleKeypad()">
     <div id="keypadSection" class="keypad">
         <div class="keypad-letters">
             <button class="key-btn btn-a" onclick="appendKey('A')">A</button>
@@ -93,8 +93,8 @@
                 <button class="key-btn func-search" onclick="executeSearch()">搜尋</button>
             </div>
             <div class="key-row">
-                <button class="key-btn nav-point" style="color:#0984e3" onclick="setPoint('from')">始</button>
-                <button class="key-btn nav-point" style="color:#d63031" onclick="setPoint('to')">終</button>
+                <button class="key-btn nav-point" style="color:#0984e3" onclick="setPoint('from')">設為起點</button>
+                <button class="key-btn nav-point" style="color:#d63031" onclick="setPoint('to')">設為終點</button>
             </div>
         </div>
     </div>
@@ -331,3 +331,4 @@
 </script>
 </body>
 </html>
+
