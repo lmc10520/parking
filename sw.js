@@ -1,4 +1,4 @@
-const CACHE_NAME = 'b2-parking-v6';
+const CACHE_NAME = 'b2-parking-v7';
 const ASSETS = [
   './',               // 首頁
   './index.html',     
@@ -43,6 +43,7 @@ self.addEventListener('fetch', (event) => {
   );
 
 });
+
 
 
 
