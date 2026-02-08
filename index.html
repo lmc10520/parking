@@ -15,55 +15,71 @@
     <style>
         body { margin: 0; padding: 0; background: #eee; overflow: hidden; }
         
-        /* 地圖容器增加平滑旋轉動畫 */
+        /* 增加 transition 讓放大與旋轉更平滑 */
         #map { 
             height: 100vh; width: 100vw; 
             background-color: #f0f0f0;
-            transition: transform 0.2s ease-out; 
+            transition: transform 0.25s ease-out, scale 0.3s ease-in-out; 
+            transform-origin: center center;
+        }
+
+        /* 當羅盤啟動時，放大地圖以填滿旋轉後的空隙 */
+        #map.compass-mode {
+            scale: 1.7; /* 放大倍率確保 360 度旋轉不露底 */
         }
         
         .search-container {
             position: absolute; top: 12px; left: 12px; z-index: 1000;
-            background: rgba(255, 255, 255, 0.95); padding: 8px; border-radius: 12px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.2); width: 250px;
+            background: rgba(255, 255, 255, 0.95); padding: 10px; border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2); width: 260px;
             font-family: sans-serif;
         }
         #routeStatus {
             font-size: 15px; margin-bottom: 8px; text-align: center; display: none;
-            background: #fff5f5; padding: 4px; border-radius: 8px;
+            background: #fff5f5; padding: 6px; border-radius: 8px;
             border: 1px solid #fab1a0; font-weight: bold; color: #d63031;
         }
         #combinedInput {
-            width: 100%; height: 38px; font-size: 18px; text-align: center;
+            width: 100%; height: 42px; font-size: 18px; text-align: center;
             border: 2px solid #ccc; border-radius: 8px;
-            background: #fff; box-sizing: border-box; cursor: pointer; margin-bottom: 6px;
+            background: #fff; box-sizing: border-box; cursor: pointer; margin-bottom: 8px;
         }
-        .keypad { display: none; flex-direction: row; gap: 6px; }
+        .keypad { display: none; flex-direction: row; gap: 8px; }
         .keypad.active { display: flex; }
-        .keypad-letters { display: flex; flex-direction: column; gap: 4px; flex: 0.7; }
-        .keypad-main { display: flex; flex-direction: column; gap: 4px; flex: 3; }
-        .key-row { display: flex; justify-content: space-between; gap: 4px; }
+        .keypad-letters { display: flex; flex-direction: column; gap: 5px; flex: 0.8; }
+        .keypad-main { display: flex; flex-direction: column; gap: 5px; flex: 3.5; }
+        .key-row { display: flex; justify-content: space-between; gap: 5px; }
+        
         .key-btn {
-            flex: 1; height: 40px; font-size: 15px; font-weight: bold;
-            cursor: pointer; border: 1px solid #bbb; border-radius: 5px;
+            flex: 1; height: 44px; font-size: 16px; font-weight: bold;
+            cursor: pointer; border: 1px solid #bbb; border-radius: 6px;
             background: #ffffff; color: #333; display: flex; align-items: center; justify-content: center;
         }
+        .key-btn:active { background: #ddd; transform: scale(0.95); }
+
         .btn-a { background-color: #DABE00 !important; color: white; border: none; }
         .btn-b { background-color: #E98B19 !important; color: white; border: none; }
         .btn-c { background-color: #E50012 !important; color: white; border: none; }
         .btn-d { background-color: #0072BE !important; color: white; border: none; }
         .btn-e { background-color: #2B8D56 !important; color: white; border: none; }
+
         .key-btn.func-clear { background: #fff5f5; color: #e03131; border-color: #ffa8a8; }
         .key-btn.func-search { background: #f4fce3; color: #2f9e44; border-color: #c0eb75; }
-        .key-btn.nav-point { background-color: #f1f2f6; border: 2px solid #ddd; }
+        
+        /* 設為起點/終點按鈕優化 */
+        .key-btn.nav-point { 
+            background-color: #f1f2f6; 
+            font-size: 13px; 
+            border: 2px solid #ddd;
+            padding: 0 4px;
+        }
 
-        /* 羅盤開關按鈕 */
         #compassBtn {
             position: absolute; top: 12px; right: 12px; z-index: 1000;
-            width: 44px; height: 44px; background: white;
+            width: 48px; height: 48px; background: white;
             border: 2px solid #ccc; border-radius: 50%;
             display: flex; align-items: center; justify-content: center;
-            font-size: 24px; cursor: pointer; box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+            font-size: 26px; cursor: pointer; box-shadow: 0 2px 8px rgba(0,0,0,0.2);
         }
         #compassBtn.active { background: #ff4757; color: white; border-color: #d63031; }
     </style>
@@ -74,7 +90,9 @@
 
 <div class="search-container">
     <div id="routeStatus"></div>
+    <!-- 更新 Placeholder 文字 -->
     <input type="text" id="combinedInput" placeholder="點擊搜尋/導航" readonly onclick="toggleKeypad()">
+    
     <div id="keypadSection" class="keypad">
         <div class="keypad-letters">
             <button class="key-btn btn-a" onclick="appendKey('A')">A</button>
@@ -83,6 +101,7 @@
             <button class="key-btn btn-d" onclick="appendKey('D')">D</button>
             <button class="key-btn btn-e" onclick="appendKey('E')">E</button>
         </div>
+        
         <div class="keypad-main">
             <div class="key-row"><button class="key-btn" onclick="appendKey('1')">1</button><button class="key-btn" onclick="appendKey('2')">2</button><button class="key-btn" onclick="appendKey('3')">3</button></div>
             <div class="key-row"><button class="key-btn" onclick="appendKey('4')">4</button><button class="key-btn" onclick="appendKey('5')">5</button><button class="key-btn" onclick="appendKey('6')">6</button></div>
@@ -92,6 +111,7 @@
                 <button class="key-btn" onclick="appendKey('0')">0</button>
                 <button class="key-btn func-search" onclick="executeSearch()">搜尋</button>
             </div>
+            <!-- 更新按鈕文字為 設為起點 / 設為終點 -->
             <div class="key-row">
                 <button class="key-btn nav-point" style="color:#0984e3" onclick="setPoint('from')">設為起點</button>
                 <button class="key-btn nav-point" style="color:#d63031" onclick="setPoint('to')">設為終點</button>
@@ -107,6 +127,7 @@
         window.addEventListener('load', () => { navigator.serviceWorker.register('sw.js'); });
     }
 
+    // --- 1. 資料定義 ---
     const imageBounds = [[22.62193, 120.34105], [22.62406, 120.34360]];
     const roadNetwork = {
         "nodes": {
@@ -143,68 +164,52 @@
         }).addTo(map);
     });
 
-    // --- 陀螺儀旋轉邏輯 ---
-    let isCompassActive = false;
+    // --- 2. 核心邏輯修正 ---
 
-    function toggleCompass() {
-        if (!isCompassActive) {
-            // iOS 請求權限
-            if (typeof DeviceOrientationEvent.requestPermission === 'function') {
-                DeviceOrientationEvent.requestPermission()
-                    .then(permissionState => {
-                        if (permissionState === 'granted') {
-                            startCompass();
-                        } else {
-                            alert("需要感測器權限才能旋轉地圖");
-                        }
-                    }).catch(console.error);
-            } else {
-                // Android 直接啟動
-                startCompass();
-            }
-        } else {
-            stopCompass();
-        }
-    }
-
-    function startCompass() {
-        isCompassActive = true;
-        document.getElementById('compassBtn').classList.add('active');
-        window.addEventListener('deviceorientation', handleOrientation);
-    }
-
-    function stopCompass() {
-        isCompassActive = false;
-        document.getElementById('compassBtn').classList.remove('active');
-        window.removeEventListener('deviceorientation', handleOrientation);
-        document.getElementById('map').style.transform = `rotate(0deg)`; // 重置
-    }
-
-    function handleOrientation(event) {
-        let heading = 0;
-        if (event.webkitCompassHeading) {
-            // iOS
-            heading = event.webkitCompassHeading;
-        } else if (event.alpha) {
-            // Android
-            heading = 360 - event.alpha;
-        }
-        // 旋轉地圖容器 (取反向角度，讓地圖跟著身體轉)
-        document.getElementById('map').style.transform = `rotate(${-heading}deg)`;
-    }
-
-    // --- 導航與輸入邏輯 (保留您要求的所有功能) ---
-
+    // 格式化輸入：柱號補 0
     function formatInput(val) {
         val = val.toUpperCase();
         if (val.length === 2 && /[A-E]/.test(val[0]) && /\d/.test(val[1])) return val[0] + '0' + val[1];
         return val;
     }
 
-    function calcDist(p1, p2) {
-        return Math.sqrt(Math.pow(p1[0] - p2[0], 2) + Math.pow(p1[1] - p2[1], 2)) * 100000;
+    // 羅盤功能與放大修復
+    let isCompassActive = false;
+    function toggleCompass() {
+        if (!isCompassActive) {
+            if (typeof DeviceOrientationEvent.requestPermission === 'function') {
+                DeviceOrientationEvent.requestPermission().then(state => {
+                    if (state === 'granted') startCompass();
+                });
+            } else { startCompass(); }
+        } else { stopCompass(); }
     }
 
+    function startCompass() {
+        isCompassActive = true;
+        document.getElementById('compassBtn').classList.add('active');
+        document.getElementById('map').classList.add('compass-mode'); // 啟用縮放修正
+        window.addEventListener('deviceorientation', handleOrientation);
+    }
+
+    function stopCompass() {
+        isCompassActive = false;
+        document.getElementById('compassBtn').classList.remove('active');
+        document.getElementById('map').classList.remove('compass-mode');
+        window.removeEventListener('deviceorientation', handleOrientation);
+        document.getElementById('map').style.transform = `rotate(0deg)`;
+    }
+
+    function handleOrientation(event) {
+        let heading = event.webkitCompassHeading || (360 - event.alpha);
+        if (heading) {
+            document.getElementById('map').style.transform = `rotate(${-heading}deg)`;
+        }
+    }
+
+    // Dijkstra 最短路徑
+    function calcDist(p1, p2) { return Math.sqrt(Math.pow(p1[0]-p2[0],2) + Math.pow(p1[1]-p2[1],2)) * 100000; }
+    
     function dijkstra(start, end) {
         const graph = {};
         for (let id in roadNetwork.nodes) graph[id] = {};
@@ -231,9 +236,9 @@
 
     function getProjectionPoint(P, A, B) {
         const x1 = A[0], y1 = A[1], x2 = B[0], y2 = B[1], px = P.lng, py = P.lat;
-        const dx = x2 - x1, dy = y2 - y1;
-        let t = Math.max(0, Math.min(1, ((px - x1) * dx + (py - y1) * dy) / (dx * dx + dy * dy)));
-        return [x1 + t * dx, y1 + t * dy];
+        const dx = x2-x1, dy = y2-y1;
+        let t = Math.max(0, Math.min(1, ((px-x1)*dx + (py-y1)*dy) / (dx*dx + dy*dy)));
+        return [x1 + t*dx, y1 + t*dy];
     }
 
     function getNearestPathInfo(latlng) {
@@ -250,30 +255,26 @@
         if (routeLine) map.removeLayer(routeLine);
         const sInfo = getNearestPathInfo(startData.pos), eInfo = getNearestPathInfo(endData.pos);
         if (!sInfo || !eInfo) return;
-
         let bestPath = null, minTotalDist = Infinity;
-        sInfo.nodes.forEach(sNode => {
-            eInfo.nodes.forEach(eNode => {
-                const path = dijkstra(sNode, eNode);
-                let total = calcDist([startData.pos.lng, startData.pos.lat], sInfo.proj);
-                total += calcDist(sInfo.proj, roadNetwork.nodes[sNode]);
-                for(let i=0; i<path.length-1; i++) total += calcDist(roadNetwork.nodes[path[i]], roadNetwork.nodes[path[i+1]]);
-                total += calcDist(roadNetwork.nodes[eNode], eInfo.proj);
-                total += calcDist(eInfo.proj, [endData.pos.lng, endData.pos.lat]);
-                if (total < minTotalDist) { minTotalDist = total; bestPath = path; }
-            });
-        });
-
+        sInfo.nodes.forEach(sNode => eInfo.nodes.forEach(eNode => {
+            const path = dijkstra(sNode, eNode);
+            let total = calcDist([startData.pos.lng, startData.pos.lat], sInfo.proj);
+            total += calcDist(sInfo.proj, roadNetwork.nodes[sNode]);
+            for(let i=0; i<path.length-1; i++) total += calcDist(roadNetwork.nodes[path[i]], roadNetwork.nodes[path[i+1]]);
+            total += calcDist(roadNetwork.nodes[eNode], eInfo.proj);
+            total += calcDist(eInfo.proj, [endData.pos.lng, endData.pos.lat]);
+            if (total < minTotalDist) { minTotalDist = total; bestPath = path; }
+        }));
         let final = [[startData.pos.lat, startData.pos.lng], [sInfo.proj[1], sInfo.proj[0]]];
         bestPath.forEach(id => final.push([roadNetwork.nodes[id][1], roadNetwork.nodes[id][0]]));
         final.push([eInfo.proj[1], eInfo.proj[0]], [endData.pos.lat, endData.pos.lng]);
-
-        routeLine = L.polyline(final, { color: '#ff4757', weight: 7, opacity: 0.8, dashArray: '8, 12', lineJoin: 'round' }).addTo(map);
-        map.fitBounds(routeLine.getBounds(), { padding: [80, 80] });
+        routeLine = L.polyline(final, { color: '#ff4757', weight: 7, opacity: 0.8, dashArray: '8, 12' }).addTo(map);
+        map.fitBounds(routeLine.getBounds(), { padding: [60, 60] });
         document.getElementById('routeStatus').style.display = "block";
         document.getElementById('routeStatus').innerHTML = `${startData.name} ➔ ${endData.name}`;
     }
 
+    // --- 3. UI 互動 ---
     function appendKey(k) { if (currentInput.length < 3) currentInput += k; document.getElementById('combinedInput').value = currentInput; }
     
     function clearInput(fullReset = false) { 
@@ -300,7 +301,6 @@
         let target = null;
         geojsonLayer.eachLayer(l => { if (l.feature.properties.name.toString().toUpperCase() === targetName) target = l; });
         if (!target) return alert("無此編號: " + targetName);
-
         const pos = target.getLatLng ? target.getLatLng() : target.getBounds().getCenter();
         if (type === 'from') {
             startData = { name: targetName, pos };
@@ -331,4 +331,3 @@
 </script>
 </body>
 </html>
-
