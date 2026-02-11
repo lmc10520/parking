@@ -4,8 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <meta name="theme-color" content="#f0f0f0">
-    <title>B2停車場導航</title>
     <meta name="description" content="提供B2停車場車格號碼、柱號的檢索與路線導引">
+    <title>B2停車場導航</title>
     
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -15,19 +15,13 @@
 
     <style>
         body { margin: 0; padding: 0; background: #eee; overflow: hidden; }
-        
-        /* 增加 transition 讓放大與旋轉更平滑 */
         #map { 
             height: 100vh; width: 100vw; 
             background-color: #f0f0f0;
             transition: transform 0.25s ease-out, scale 0.3s ease-in-out; 
             transform-origin: center center;
         }
-
-        /* 當羅盤啟動時，放大地圖以填滿旋轉後的空隙 */
-        #map.compass-mode {
-            scale: 2.2; /* 放大倍率確保 360 度旋轉不露底 */
-        }
+        #map.compass-mode { scale: 2.2; }
         
         .search-container {
             position: absolute; top: 12px; left: 12px; z-index: 1000;
@@ -66,14 +60,7 @@
 
         .key-btn.func-clear { background: #fff5f5; color: #e03131; border-color: #ffa8a8; }
         .key-btn.func-search { background: #f4fce3; color: #2f9e44; border-color: #c0eb75; }
-        
-        /* 設為起點/終點按鈕優化 */
-        .key-btn.nav-point { 
-            background-color: #f1f2f6; 
-            font-size: 13px; 
-            border: 2px solid #ddd;
-            padding: 0 4px;
-        }
+        .key-btn.nav-point { background-color: #f1f2f6; font-size: 13px; border: 2px solid #ddd; }
 
         #compassBtn {
             position: absolute; top: 12px; right: 12px; z-index: 1000;
@@ -83,6 +70,15 @@
             font-size: 26px; cursor: pointer; box-shadow: 0 2px 8px rgba(0,0,0,0.2);
         }
         #compassBtn.active { background: #ff4757; color: white; border-color: #d63031; }
+
+        .popup-nav-container { text-align: center; padding: 5px; }
+        .popup-btn {
+            display: block; width: 100%; margin-top: 8px; padding: 10px 0;
+            border-radius: 5px; border: 1px solid #ccc; font-weight: bold;
+            cursor: pointer; font-size: 14px;
+        }
+        .popup-btn.from { background: #0984e3; color: white; border: none; }
+        .popup-btn.to { background: #d63031; color: white; border: none; }
     </style>
 </head>
 <body>
@@ -91,7 +87,6 @@
 
 <div class="search-container">
     <div id="routeStatus"></div>
-    <!-- 更新 Placeholder 文字 -->
     <input type="text" id="combinedInput" placeholder="點擊搜尋/導航" readonly onclick="toggleKeypad()">
     
     <div id="keypadSection" class="keypad">
@@ -112,7 +107,6 @@
                 <button class="key-btn" onclick="appendKey('0')">0</button>
                 <button class="key-btn func-search" onclick="executeSearch()">搜尋</button>
             </div>
-            <!-- 更新按鈕文字為 設為起點 / 設為終點 -->
             <div class="key-row">
                 <button class="key-btn nav-point" style="color:#0984e3" onclick="setPoint('from')">設為起點</button>
                 <button class="key-btn nav-point" style="color:#d63031" onclick="setPoint('to')">設為終點</button>
@@ -128,7 +122,6 @@
         window.addEventListener('load', () => { navigator.serviceWorker.register('sw.js'); });
     }
 
-    // --- 1. 資料定義 ---
     const imageBounds = [[22.62193, 120.34105], [22.62406, 120.34360]];
     const roadNetwork = {
         "nodes": {
@@ -161,20 +154,31 @@
         geojsonLayer = L.geoJSON(data, {
             pointToLayer: (f, l) => L.circleMarker(l, { radius: 3, fillColor: "#ff9800", color: "#000", weight: 1, opacity: 0.3, fillOpacity: 0.5 }),
             style: () => ({ color: "#3388ff", opacity: 0.1, weight: 1, fillOpacity: 0 }),
-            onEachFeature: (f, layer) => layer.bindPopup("名稱: " + f.properties.name)
+            onEachFeature: function(feature, layer) {
+                const name = feature.properties.name;
+                const popupContent = `
+                    <div class="popup-nav-container">
+                        <b>${name}</b>
+                        <button class="popup-btn from" onclick="setPointViaMap('${name}', 'from')">設為起點</button>
+                        <button class="popup-btn to" onclick="setPointViaMap('${name}', 'to')">設為終點</button>
+                    </div>
+                `;
+                layer.bindPopup(popupContent);
+            }
         }).addTo(map);
     });
 
-    // --- 2. 核心邏輯修正 ---
-
-    // 格式化輸入：柱號補 0
+    // --- 輔助：自動補 0 邏輯 ---
     function formatInput(val) {
         val = val.toUpperCase();
-        if (val.length === 2 && /[A-E]/.test(val[0]) && /\d/.test(val[1])) return val[0] + '0' + val[1];
+        // 只有符合 [字母][一位數字] 的情況才補0，避免影響票口等文字地名
+        if (val.length === 2 && /[A-E]/.test(val[0]) && /\d/.test(val[1])) {
+            return val[0] + '0' + val[1];
+        }
         return val;
     }
 
-    // 羅盤功能與放大修復
+    // --- 羅盤邏輯 ---
     let isCompassActive = false;
     function toggleCompass() {
         if (!isCompassActive) {
@@ -185,14 +189,12 @@
             } else { startCompass(); }
         } else { stopCompass(); }
     }
-
     function startCompass() {
         isCompassActive = true;
         document.getElementById('compassBtn').classList.add('active');
-        document.getElementById('map').classList.add('compass-mode'); // 啟用縮放修正
+        document.getElementById('map').classList.add('compass-mode');
         window.addEventListener('deviceorientation', handleOrientation);
     }
-
     function stopCompass() {
         isCompassActive = false;
         document.getElementById('compassBtn').classList.remove('active');
@@ -200,17 +202,13 @@
         window.removeEventListener('deviceorientation', handleOrientation);
         document.getElementById('map').style.transform = `rotate(0deg)`;
     }
-
     function handleOrientation(event) {
         let heading = event.webkitCompassHeading || (360 - event.alpha);
-        if (heading) {
-            document.getElementById('map').style.transform = `rotate(${-heading}deg)`;
-        }
+        if (heading) document.getElementById('map').style.transform = `rotate(${-heading}deg)`;
     }
 
-    // Dijkstra 最短路徑
+    // --- 導航核心邏輯 (最短物理距離) ---
     function calcDist(p1, p2) { return Math.sqrt(Math.pow(p1[0]-p2[0],2) + Math.pow(p1[1]-p2[1],2)) * 100000; }
-    
     function dijkstra(start, end) {
         const graph = {};
         for (let id in roadNetwork.nodes) graph[id] = {};
@@ -259,23 +257,30 @@
         let bestPath = null, minTotalDist = Infinity;
         sInfo.nodes.forEach(sNode => eInfo.nodes.forEach(eNode => {
             const path = dijkstra(sNode, eNode);
-            let total = calcDist([startData.pos.lng, startData.pos.lat], sInfo.proj);
-            total += calcDist(sInfo.proj, roadNetwork.nodes[sNode]);
+            let total = calcDist([startData.pos.lng, startData.pos.lat], sInfo.proj) + calcDist(sInfo.proj, roadNetwork.nodes[sNode]);
             for(let i=0; i<path.length-1; i++) total += calcDist(roadNetwork.nodes[path[i]], roadNetwork.nodes[path[i+1]]);
-            total += calcDist(roadNetwork.nodes[eNode], eInfo.proj);
-            total += calcDist(eInfo.proj, [endData.pos.lng, endData.pos.lat]);
+            total += calcDist(roadNetwork.nodes[eNode], eInfo.proj) + calcDist(eInfo.proj, [endData.pos.lng, endData.pos.lat]);
             if (total < minTotalDist) { minTotalDist = total; bestPath = path; }
         }));
         let final = [[startData.pos.lat, startData.pos.lng], [sInfo.proj[1], sInfo.proj[0]]];
         bestPath.forEach(id => final.push([roadNetwork.nodes[id][1], roadNetwork.nodes[id][0]]));
         final.push([eInfo.proj[1], eInfo.proj[0]], [endData.pos.lat, endData.pos.lng]);
-        routeLine = L.polyline(final, { color: '#ff4757', weight: 7, opacity: 0.8, dashArray: '8, 12' }).addTo(map);
-        map.fitBounds(routeLine.getBounds(), { padding: [60, 60] });
+        routeLine = L.polyline(final, { color: '#ff4757', weight: 8, opacity: 0.8, dashArray: '8, 12' }).addTo(map);
+        map.fitBounds(routeLine.getBounds(), { padding: [80, 80] });
         document.getElementById('routeStatus').style.display = "block";
         document.getElementById('routeStatus').innerHTML = `${startData.name} ➔ ${endData.name}`;
     }
 
-    // --- 3. UI 互動 ---
+    // --- 互動功能 ---
+    window.setPointViaMap = function(name, type) {
+        let targetLayer = null;
+        geojsonLayer.eachLayer(l => { if (l.feature.properties.name === name) targetLayer = l; });
+        if (!targetLayer) return;
+        const pos = targetLayer.getLatLng ? targetLayer.getLatLng() : targetLayer.getBounds().getCenter();
+        applyPoint(name, pos, type);
+        map.closePopup();
+    }
+
     function appendKey(k) { if (currentInput.length < 3) currentInput += k; document.getElementById('combinedInput').value = currentInput; }
     
     function clearInput(fullReset = false) { 
@@ -303,12 +308,16 @@
         geojsonLayer.eachLayer(l => { if (l.feature.properties.name.toString().toUpperCase() === targetName) target = l; });
         if (!target) return alert("無此編號: " + targetName);
         const pos = target.getLatLng ? target.getLatLng() : target.getBounds().getCenter();
+        applyPoint(targetName, pos, type);
+    }
+
+    function applyPoint(name, pos, type) {
         if (type === 'from') {
-            startData = { name: targetName, pos };
+            startData = { name, pos };
             if (startMarker) map.removeLayer(startMarker);
             startMarker = L.circleMarker(pos, { radius: 10, color: '#0984e3', fillColor: '#0984e3', fillOpacity: 1 }).addTo(map);
         } else {
-            endData = { name: targetName, pos };
+            endData = { name, pos };
             if (endMarker) map.removeLayer(endMarker);
             endMarker = L.marker(pos, { icon: redFlagIcon }).addTo(map);
         }
@@ -332,4 +341,3 @@
 </script>
 </body>
 </html>
-
