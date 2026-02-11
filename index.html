@@ -22,13 +22,13 @@
             transition: transform 0.25s ease-out, scale 0.3s ease-in-out; 
             transform-origin: center center;
         }
-        
+
         #map.compass-mode { scale: 2.2; }
         
         .search-container {
             position: absolute; top: 12px; left: 12px; z-index: 1000;
             background: rgba(255, 255, 255, 0.95); padding: 10px; border-radius: 12px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.2); width: 280px; /* 稍微加寬容納長字串 */
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2); width: 260px;
             font-family: sans-serif;
         }
         #routeStatus {
@@ -78,7 +78,6 @@
         }
         #compassBtn.active { background: #ff4757; color: white; border-color: #d63031; }
 
-        /* Popup 樣式優化：padding 10px 確保左右間距 */
         .popup-nav-container { text-align: center; padding: 5px; }
         .popup-btn {
             display: block; width: 100%; margin-top: 8px; padding: 10px;
@@ -130,7 +129,6 @@
         window.addEventListener('load', () => { navigator.serviceWorker.register('sw.js'); });
     }
 
-    // --- 1. 資料定義 (已更新 C3 座標) ---
     const imageBounds = [[22.62193, 120.34105], [22.62406, 120.34360]];
     const roadNetwork = {
         "nodes": {
@@ -159,25 +157,40 @@
     L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', { opacity: 0.4, maxZoom: 24, maxNativeZoom: 19 }).addTo(map);
     L.imageOverlay('B2-20250921.svg', imageBounds, { opacity: 0.8, interactive: false }).addTo(map);
 
+    // --- 載入數據 ---
     fetch('parking.geojson').then(res => res.json()).then(data => {
         geojsonLayer = L.geoJSON(data, {
             pointToLayer: (f, l) => L.circleMarker(l, { radius: 3, fillColor: "#ff9800", color: "#000", weight: 1, opacity: 0.3, fillOpacity: 0.5 }),
             style: () => ({ color: "#3388ff", opacity: 0.1, weight: 1, fillOpacity: 0 }),
             onEachFeature: function(feature, layer) {
                 const name = feature.properties.name;
-                const popupContent = `
-                    <div class="popup-nav-container">
-                        <b>${name}</b>
-                        <button class="popup-btn from" onclick="setPointViaMap('${name}', 'from')">設為起點</button>
-                        <button class="popup-btn to" onclick="setPointViaMap('${name}', 'to')">設為終點</button>
-                    </div>
-                `;
-                layer.bindPopup(popupContent);
+                const roadId = feature.properties.road_id;
+                
+                // 如果具備 road_id，顯示導航按鈕 Popup
+                if (roadId) {
+                    const popupContent = `
+                        <div class="popup-nav-container">
+                            <b>${name}</b>
+                            <button class="popup-btn from" onclick="setPointViaMap('${name}', 'from')">設為起點</button>
+                            <button class="popup-btn to" onclick="setPointViaMap('${name}', 'to')">設為終點</button>
+                        </div>
+                    `;
+                    layer.bindPopup(popupContent);
+                } else {
+                    layer.bindPopup(`<b>${name}</b>`);
+                }
             }
         }).addTo(map);
     });
 
-    // --- 2. 羅盤優化：解決方向不一致與邊界空洞 ---
+    // --- 輔助功能 ---
+    function formatInput(val) {
+        val = val.toUpperCase();
+        if (val.length === 2 && /[A-E]/.test(val[0]) && /\d/.test(val[1])) return val[0] + '0' + val[1];
+        return val;
+    }
+
+    // --- 羅盤邏輯 ---
     let isCompassActive = false;
     function toggleCompass() {
         if (!isCompassActive) {
@@ -188,43 +201,31 @@
             } else { startCompass(); }
         } else { stopCompass(); }
     }
-    
     function startCompass() {
         isCompassActive = true;
         document.getElementById('compassBtn').classList.add('active');
         document.getElementById('map').classList.add('compass-mode');
-        
-        // 核心修正：導航旋轉模式下禁用拖動，防止方向不一致的挫折感
-        map.dragging.disable(); 
-        
-        // 如果已有起點，自動對齊起點
+        map.dragging.disable();
         if (startData) map.panTo(startData.pos);
-        
         window.addEventListener('deviceorientation', handleOrientation);
     }
-    
     function stopCompass() {
         isCompassActive = false;
         document.getElementById('compassBtn').classList.remove('active');
         document.getElementById('map').classList.remove('compass-mode');
-        
-        // 恢復拖動
-        map.dragging.enable(); 
-        
+        map.dragging.enable();
         window.removeEventListener('deviceorientation', handleOrientation);
         document.getElementById('map').style.transform = `rotate(0deg)`;
     }
-
     function handleOrientation(event) {
         let heading = event.webkitCompassHeading || (360 - event.alpha);
         if (heading) {
             document.getElementById('map').style.transform = `rotate(${-heading}deg)`;
-            // 如果起點存在，旋轉時保持起點在畫面中心，實現導航跟隨感
             if (startData) map.panTo(startData.pos, {animate: false});
         }
     }
 
-    // --- 3. 導航核心邏輯 ---
+    // --- 導航核心邏輯 ---
     function calcDist(p1, p2) { return Math.sqrt(Math.pow(p1[0]-p2[0],2) + Math.pow(p1[1]-p2[1],2)) * 100000; }
     function dijkstra(start, end) {
         const graph = {};
@@ -288,20 +289,21 @@
         document.getElementById('routeStatus').innerHTML = `${startData.name} ➔ ${endData.name}`;
     }
 
-    // --- 4. 互動功能 ---
+    // --- 互動功能 ---
     window.setPointViaMap = function(name, type) {
         let targetLayer = null;
         geojsonLayer.eachLayer(l => { if (l.feature.properties.name === name) targetLayer = l; });
         if (!targetLayer) return;
+
+        // 檢查 road_id
+        if (!targetLayer.feature.properties.road_id) {
+            alert("此區域不可作為起點或終點");
+            return;
+        }
+
         const pos = targetLayer.getLatLng ? targetLayer.getLatLng() : targetLayer.getBounds().getCenter();
         applyPoint(name, pos, type);
         map.closePopup();
-    }
-
-    function formatInput(val) {
-        val = val.toUpperCase();
-        if (val.length === 2 && /[A-E]/.test(val[0]) && /\d/.test(val[1])) return val[0] + '0' + val[1];
-        return val;
     }
 
     function appendKey(k) { if (currentInput.length < 3) currentInput += k; document.getElementById('combinedInput').value = currentInput; }
@@ -329,7 +331,15 @@
         const targetName = formatInput(currentInput);
         let target = null;
         geojsonLayer.eachLayer(l => { if (l.feature.properties.name.toString().toUpperCase() === targetName) target = l; });
+        
         if (!target) return alert("無此編號: " + targetName);
+
+        // 檢查 road_id
+        if (!target.feature.properties.road_id) {
+            alert("此編號不可作為導航點（未配置路徑）");
+            return;
+        }
+
         const pos = target.getLatLng ? target.getLatLng() : target.getBounds().getCenter();
         applyPoint(targetName, pos, type);
     }
@@ -351,15 +361,21 @@
     function executeSearch() {
         if (!currentInput || !geojsonLayer) return;
         const targetName = formatInput(currentInput);
+        let found = false;
         geojsonLayer.eachLayer(l => {
             if (l.feature.properties.name.toString().toUpperCase() === targetName) {
-                const pos = l.getLatLng ? l.getLatLng() : l.getBounds().getCenter();
-                map.setView(pos, 21);
-                l.setStyle({ color: '#ff0000', opacity: 1, weight: 4, fillColor: '#ffff00', fillOpacity: 0.7 });
-                l.openPopup(); activeSpot = l;
-                document.getElementById('keypadSection').classList.remove('active');
+                // 搜尋也同步過濾具備 road_id 的有效點
+                if (l.feature.properties.road_id) {
+                    const pos = l.getLatLng ? l.getLatLng() : l.getBounds().getCenter();
+                    map.setView(pos, 21);
+                    l.setStyle({ color: '#ff0000', opacity: 1, weight: 4, fillColor: '#ffff00', fillOpacity: 0.7 });
+                    l.openPopup(); activeSpot = l;
+                    document.getElementById('keypadSection').classList.remove('active');
+                    found = true;
+                }
             }
         });
+        if (!found && currentInput) alert("找不到具備路徑配置的有效編號: " + targetName);
     }
 </script>
 </body>
