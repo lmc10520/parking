@@ -15,18 +15,20 @@
 
     <style>
         body { margin: 0; padding: 0; background: #eee; overflow: hidden; }
+        
         #map { 
             height: 100vh; width: 100vw; 
             background-color: #f0f0f0;
             transition: transform 0.25s ease-out, scale 0.3s ease-in-out; 
             transform-origin: center center;
         }
+        
         #map.compass-mode { scale: 2.2; }
         
         .search-container {
             position: absolute; top: 12px; left: 12px; z-index: 1000;
             background: rgba(255, 255, 255, 0.95); padding: 10px; border-radius: 12px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.2); width: 260px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2); width: 280px; /* 稍微加寬容納長字串 */
             font-family: sans-serif;
         }
         #routeStatus {
@@ -60,7 +62,12 @@
 
         .key-btn.func-clear { background: #fff5f5; color: #e03131; border-color: #ffa8a8; }
         .key-btn.func-search { background: #f4fce3; color: #2f9e44; border-color: #c0eb75; }
-        .key-btn.nav-point { background-color: #f1f2f6; font-size: 13px; border: 2px solid #ddd; }
+        
+        .key-btn.nav-point { 
+            background-color: #f1f2f6; 
+            font-size: 13px; 
+            border: 2px solid #ddd;
+        }
 
         #compassBtn {
             position: absolute; top: 12px; right: 12px; z-index: 1000;
@@ -71,11 +78,12 @@
         }
         #compassBtn.active { background: #ff4757; color: white; border-color: #d63031; }
 
+        /* Popup 樣式優化：padding 10px 確保左右間距 */
         .popup-nav-container { text-align: center; padding: 5px; }
         .popup-btn {
             display: block; width: 100%; margin-top: 8px; padding: 10px;
             border-radius: 5px; border: 1px solid #ccc; font-weight: bold;
-            cursor: pointer; font-size: 14px;
+            cursor: pointer; font-size: 14px; box-sizing: border-box;
         }
         .popup-btn.from { background: #0984e3; color: white; border: none; }
         .popup-btn.to { background: #d63031; color: white; border: none; }
@@ -122,6 +130,7 @@
         window.addEventListener('load', () => { navigator.serviceWorker.register('sw.js'); });
     }
 
+    // --- 1. 資料定義 (已更新 C3 座標) ---
     const imageBounds = [[22.62193, 120.34105], [22.62406, 120.34360]];
     const roadNetwork = {
         "nodes": {
@@ -168,17 +177,7 @@
         }).addTo(map);
     });
 
-    // --- 輔助：自動補 0 邏輯 ---
-    function formatInput(val) {
-        val = val.toUpperCase();
-        // 只有符合 [字母][一位數字] 的情況才補0，避免影響票口等文字地名
-        if (val.length === 2 && /[A-E]/.test(val[0]) && /\d/.test(val[1])) {
-            return val[0] + '0' + val[1];
-        }
-        return val;
-    }
-
-    // --- 羅盤邏輯 ---
+    // --- 2. 羅盤優化：解決方向不一致與邊界空洞 ---
     let isCompassActive = false;
     function toggleCompass() {
         if (!isCompassActive) {
@@ -189,25 +188,43 @@
             } else { startCompass(); }
         } else { stopCompass(); }
     }
+    
     function startCompass() {
         isCompassActive = true;
         document.getElementById('compassBtn').classList.add('active');
         document.getElementById('map').classList.add('compass-mode');
+        
+        // 核心修正：導航旋轉模式下禁用拖動，防止方向不一致的挫折感
+        map.dragging.disable(); 
+        
+        // 如果已有起點，自動對齊起點
+        if (startData) map.panTo(startData.pos);
+        
         window.addEventListener('deviceorientation', handleOrientation);
     }
+    
     function stopCompass() {
         isCompassActive = false;
         document.getElementById('compassBtn').classList.remove('active');
         document.getElementById('map').classList.remove('compass-mode');
+        
+        // 恢復拖動
+        map.dragging.enable(); 
+        
         window.removeEventListener('deviceorientation', handleOrientation);
         document.getElementById('map').style.transform = `rotate(0deg)`;
     }
+
     function handleOrientation(event) {
         let heading = event.webkitCompassHeading || (360 - event.alpha);
-        if (heading) document.getElementById('map').style.transform = `rotate(${-heading}deg)`;
+        if (heading) {
+            document.getElementById('map').style.transform = `rotate(${-heading}deg)`;
+            // 如果起點存在，旋轉時保持起點在畫面中心，實現導航跟隨感
+            if (startData) map.panTo(startData.pos, {animate: false});
+        }
     }
 
-    // --- 導航核心邏輯 (最短物理距離) ---
+    // --- 3. 導航核心邏輯 ---
     function calcDist(p1, p2) { return Math.sqrt(Math.pow(p1[0]-p2[0],2) + Math.pow(p1[1]-p2[1],2)) * 100000; }
     function dijkstra(start, end) {
         const graph = {};
@@ -271,7 +288,7 @@
         document.getElementById('routeStatus').innerHTML = `${startData.name} ➔ ${endData.name}`;
     }
 
-    // --- 互動功能 ---
+    // --- 4. 互動功能 ---
     window.setPointViaMap = function(name, type) {
         let targetLayer = null;
         geojsonLayer.eachLayer(l => { if (l.feature.properties.name === name) targetLayer = l; });
@@ -279,6 +296,12 @@
         const pos = targetLayer.getLatLng ? targetLayer.getLatLng() : targetLayer.getBounds().getCenter();
         applyPoint(name, pos, type);
         map.closePopup();
+    }
+
+    function formatInput(val) {
+        val = val.toUpperCase();
+        if (val.length === 2 && /[A-E]/.test(val[0]) && /\d/.test(val[1])) return val[0] + '0' + val[1];
+        return val;
     }
 
     function appendKey(k) { if (currentInput.length < 3) currentInput += k; document.getElementById('combinedInput').value = currentInput; }
@@ -341,4 +364,3 @@
 </script>
 </body>
 </html>
-
