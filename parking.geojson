@@ -342,7 +342,7 @@
          "type":"Feature",
          "properties":{
             "name":"戲劇院B2票口",
-            "road_id": "",
+            "road_id": "B3B4",
             "description":""
          },
          "geometry":{
@@ -622,7 +622,7 @@
          "type":"Feature",
          "properties":{
             "name":"音樂廳西側B2梯廳",
-            "road_id": "",
+            "road_id": "C3C4",
             "description":""
          },
          "geometry":{
@@ -799,6 +799,7 @@
          "type":"Feature",
          "properties":{
             "name":"入口大廳風除室及梯廳",
+            "road_id": "A1A3",
             "description":"開放時間0700-0100，往1F榕樹廣場、3F樹冠大廳，可通往B1F演職人員停車場；"
          },
          "geometry":{
@@ -833,7 +834,7 @@
          "type":"Feature",
          "properties":{
             "name":"營運辦公室",
-            "road_id": "",
+            "road_id": "B4B5",
             "description":""
          },
          "geometry":{
@@ -868,7 +869,7 @@
          "type":"Feature",
          "properties":{
             "name":"歌劇院B2票口",
-            "road_id": "",
+            "road_id": "C3C4",
             "description":""
          },
          "geometry":{
@@ -938,7 +939,7 @@
          "type":"Feature",
          "properties":{
             "name":"音樂廳東側B2票口",
-            "road_id": "",
+            "road_id": "C2D2",
             "description":""
          },
          "geometry":{
@@ -973,7 +974,7 @@
          "type":"Feature",
          "properties":{
             "name":"表演廳旁往2F榕樹廣場、3F樹冠大廳電梯",
-            "road_id": "",
+            "road_id": "C4C5",
             "description":""
          },
          "geometry":{
@@ -1008,7 +1009,7 @@
          "type":"Feature",
          "properties":{
             "name":"潮台菜旁通往1F榕樹廣場、戶外劇場樓梯",
-            "road_id": "",
+            "road_id": "C1D1",
             "description":""
          },
          "geometry":{
@@ -21114,4 +21115,5 @@
          }
       }
    ]
+
 }
