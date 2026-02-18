@@ -155,7 +155,7 @@
 
     const map = L.map('map', { center: [22.6231, 120.3425], zoom: 18, maxZoom: 24, minZoom: 15, zoomControl: false });
     L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', { opacity: 0.4, maxZoom: 24, maxNativeZoom: 19 }).addTo(map);
-    L.imageOverlay('B2-20250921.svg', imageBounds, { opacity: 0.8, interactive: false }).addTo(map);
+    L.imageOverlay('B2-20260218.svg', imageBounds, { opacity: 0.8, interactive: false }).addTo(map);
 
     // --- 載入數據 ---
     fetch('parking.geojson').then(res => res.json()).then(data => {
@@ -380,3 +380,4 @@
 </script>
 </body>
 </html>
+
