@@ -168,7 +168,7 @@
     let isOccupancyMode = false;
     let occupiedSet = new Set();
 
-    const map = L.map('map', { center: [22.6231, 120.3425], zoom: 18, maxZoom: 24, minZoom: 15, zoomControl: false });
+    const map = L.map('map', { center: [22.6231, 120.3425], zoom: 19, maxZoom: 24, minZoom: 17, zoomControl: false });
     L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', { opacity: 0.4, maxZoom: 24, maxNativeZoom: 19 }).addTo(map);
     L.imageOverlay('B2-20260218.svg', imageBounds, { opacity: 0.8, interactive: false }).addTo(map);
 
@@ -523,6 +523,7 @@ async function refreshOccupancy() {
 </script>
 </body>
 </html>
+
 
 
 
