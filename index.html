@@ -209,7 +209,7 @@
             btn.innerHTML = "⌛"; // 讀取中
             await fetchOccupancyData();
             applyOccupancyStyle();
-            btn.innerHTML = "🚗";
+            btn.innerHTML = "🚥";
         } else {
             btn.classList.remove('active');
             resetOccupancyStyle();
@@ -249,7 +249,7 @@
     // 將抓取與套用樣式封裝成一個函式，方便重複呼叫
     async function refreshOccupancy() {
         const btn = document.getElementById('occupancyBtn');
-        const originalIcon = "🚗";
+        const originalIcon = "🚥";
         
         try {
             // 抓取資料時讓按鈕閃爍一下或顯示讀取中，讓使用者知道在更新
@@ -518,6 +518,7 @@
 </script>
 </body>
 </html>
+
 
 
 
