@@ -199,47 +199,48 @@
         }).addTo(map);
     });
 
+    // --- 當使用者在使用中突然斷網時，自動關閉車位顯示模式，確保地圖回歸穩定狀態
+    window.addEventListener('offline', () => {
+        if (isOccupancyMode) {
+            toggleOccupancy(); // 自動切換為關閉狀態
+            alert("網路連線已斷開，切換至離線導航模式。");
+        }
+    });
+
+let occupancyTimer = null; // 新增計時器變數
+
     // --- 即時車位顯示邏輯 ---
     async function toggleOccupancy() {
         const btn = document.getElementById('occupancyBtn');
-        isOccupancyMode = !isOccupancyMode;
         
-        if (isOccupancyMode) {
-            btn.classList.add('active');
-            btn.innerHTML = "⌛"; // 讀取中
-            await fetchOccupancyData();
-            applyOccupancyStyle();
-            btn.innerHTML = "🚥";
-        } else {
+        // 1. 離線檢查
+        if (!navigator.onLine) {
+            alert("目前為離線狀態，無法取得即時車位資訊。\n搜尋與導航功能仍可正常使用。");
+            isOccupancyMode = false;
             btn.classList.remove('active');
-            resetOccupancyStyle();
+            return;
         }
-    }
 
-    let occupancyTimer = null; // 新增計時器變數
-
-    // 修改後的切換函式
-    async function toggleOccupancy() {
-        const btn = document.getElementById('occupancyBtn');
         isOccupancyMode = !isOccupancyMode;
         
         if (isOccupancyMode) {
             btn.classList.add('active');
-            
-            // 1. 立即進行第一次抓取
             await refreshOccupancy();
             
-            // 2. 設定每 60 秒自動執行一次更新 (60000 毫秒)
+            // 設定定時更新
             occupancyTimer = setInterval(async () => {
-                console.log("正在自動更新車位狀態...");
-                await refreshOccupancy();
+                // 自動更新時若斷網，就靜默停止，不彈出視窗打擾使用者
+                if (navigator.onLine) {
+                    await refreshOccupancy();
+                } else {
+                    console.log("偵測到離線，暫停自動更新");
+                }
             }, 60000);
             
         } else {
-            // 停止模式
             btn.classList.remove('active');
             if (occupancyTimer) {
-                clearInterval(occupancyTimer); // 停止計時器
+                clearInterval(occupancyTimer);
                 occupancyTimer = null;
             }
             resetOccupancyStyle();
@@ -247,40 +248,45 @@
     }
 
     // 將抓取與套用樣式封裝成一個函式，方便重複呼叫
-    async function refreshOccupancy() {
+async function refreshOccupancy() {
         const btn = document.getElementById('occupancyBtn');
-        const originalIcon = "🚥";
+        const originalIcon = "🚗";
         
         try {
-            // 抓取資料時讓按鈕閃爍一下或顯示讀取中，讓使用者知道在更新
             btn.innerHTML = "⌛"; 
-            
             await fetchOccupancyData();
             applyOccupancyStyle();
-            
             btn.innerHTML = originalIcon;
         } catch (e) {
-            btn.innerHTML = "❌"; // 失敗時顯示錯誤
-            setTimeout(() => { btn.innerHTML = originalIcon; }, 2000);
+            // 抓取失敗時 (例如 API 伺服器掛掉或瞬間斷網)
+            console.error("更新失敗", e);
+            btn.innerHTML = "⚠️"; // 顯示警告圖示
+            // 如果是自動更新中失敗，不關閉模式，等下一分鐘再試
+            if (!isOccupancyMode) btn.classList.remove('active');
         }
     }
-
+    
     // 這是您剛才修改過、具備「去零」邏輯的資料抓取函式
     async function fetchOccupancyData() {
         try {
-            const response = await fetch(API_URL);
+            // 加入 timeout 機制，避免網路太慢時轉圈圈太久 (5秒超時)
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 5000);
+
+            const response = await fetch(API_URL, { signal: controller.signal });
+            clearTimeout(timeoutId);
+
+            if (!response.ok) throw new Error("API 回應錯誤");
+
             const result = await response.json();
             occupiedSet.clear();
             
             const carData = result.data || result;
             if (Array.isArray(carData)) {
                 carData.forEach(item => {
-                    // 同時相容 B2F_ 或 B2F-，並處理三位數補零問題
                     if (item.ParkingNumber && (item.ParkingNumber.startsWith("B2F_") || item.ParkingNumber.startsWith("B2F-"))) {
                         const rawNumPart = item.ParkingNumber.substring(4); 
-                        const spotNum = parseInt(rawNumPart, 10).toString(); // 去除前導零
-                        
-                        // 判斷是否有車
+                        const spotNum = parseInt(rawNumPart, 10).toString();
                         if (item.LicensePlate && item.LicensePlate !== "" && item.LicensePlate !== "Empty") {
                             occupiedSet.add(spotNum);
                         }
@@ -288,8 +294,7 @@
                 });
             }
         } catch (e) {
-            console.error("API 抓取失敗", e);
-            throw e; // 丟出錯誤讓 refreshOccupancy 處理 UI
+            throw e; // 丟給 refreshOccupancy 處理 UI
         }
     }
 
@@ -518,6 +523,7 @@
 </script>
 </body>
 </html>
+
 
 
 
