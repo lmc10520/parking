@@ -216,6 +216,56 @@
         }
     }
 
+    let occupancyTimer = null; // 新增計時器變數
+
+    // 修改後的切換函式
+    async function toggleOccupancy() {
+        const btn = document.getElementById('occupancyBtn');
+        isOccupancyMode = !isOccupancyMode;
+        
+        if (isOccupancyMode) {
+            btn.classList.add('active');
+            
+            // 1. 立即進行第一次抓取
+            await refreshOccupancy();
+            
+            // 2. 設定每 60 秒自動執行一次更新 (60000 毫秒)
+            occupancyTimer = setInterval(async () => {
+                console.log("正在自動更新車位狀態...");
+                await refreshOccupancy();
+            }, 60000);
+            
+        } else {
+            // 停止模式
+            btn.classList.remove('active');
+            if (occupancyTimer) {
+                clearInterval(occupancyTimer); // 停止計時器
+                occupancyTimer = null;
+            }
+            resetOccupancyStyle();
+        }
+    }
+
+    // 將抓取與套用樣式封裝成一個函式，方便重複呼叫
+    async function refreshOccupancy() {
+        const btn = document.getElementById('occupancyBtn');
+        const originalIcon = "🚗";
+        
+        try {
+            // 抓取資料時讓按鈕閃爍一下或顯示讀取中，讓使用者知道在更新
+            btn.innerHTML = "⌛"; 
+            
+            await fetchOccupancyData();
+            applyOccupancyStyle();
+            
+            btn.innerHTML = originalIcon;
+        } catch (e) {
+            btn.innerHTML = "❌"; // 失敗時顯示錯誤
+            setTimeout(() => { btn.innerHTML = originalIcon; }, 2000);
+        }
+    }
+
+    // 這是您剛才修改過、具備「去零」邏輯的資料抓取函式
     async function fetchOccupancyData() {
         try {
             const response = await fetch(API_URL);
@@ -225,30 +275,21 @@
             const carData = result.data || result;
             if (Array.isArray(carData)) {
                 carData.forEach(item => {
-                    // 1. 同時相容 B2F_ 或 B2F- 的開頭格式
+                    // 同時相容 B2F_ 或 B2F-，並處理三位數補零問題
                     if (item.ParkingNumber && (item.ParkingNumber.startsWith("B2F_") || item.ParkingNumber.startsWith("B2F-"))) {
-                        
-                        // 2. 取得分隔符號之後的字串內容 (例如從 "B2F_063" 取得 "063")
                         const rawNumPart = item.ParkingNumber.substring(4); 
+                        const spotNum = parseInt(rawNumPart, 10).toString(); // 去除前導零
                         
-                        // 3. 關鍵修正：將 "063" 轉為數字 63，再轉回字串 "63"
-                        // 這樣就能把 100 號以前的前導零 (0) 全部去掉，與 GeoJSON 的 "name" 匹配
-                        const spotNum = parseInt(rawNumPart, 10).toString();
-                        
-                        // 4. 判斷是否有車輛占用
-                        // 只要有車牌，且車牌不是空的、不是 "Empty"，就視為占用
+                        // 判斷是否有車
                         if (item.LicensePlate && item.LicensePlate !== "" && item.LicensePlate !== "Empty") {
                             occupiedSet.add(spotNum);
                         }
                     }
                 });
-                console.log("當前占用車位清單 (已去零):", Array.from(occupiedSet));
             }
         } catch (e) {
-            console.error("無法獲取即時車位資料", e);
-            alert("即時資料連線失敗");
-            isOccupancyMode = false;
-            document.getElementById('occupancyBtn').classList.remove('active');
+            console.error("API 抓取失敗", e);
+            throw e; // 丟出錯誤讓 refreshOccupancy 處理 UI
         }
     }
 
@@ -477,4 +518,5 @@
 </script>
 </body>
 </html>
+
 
