@@ -222,20 +222,27 @@
             const result = await response.json();
             occupiedSet.clear();
             
-            // 假設 API 資料在 result.data 或直接在 result
             const carData = result.data || result;
             if (Array.isArray(carData)) {
                 carData.forEach(item => {
-                    // 比對 B2F-，並檢查是否有車 (假設有 LicensePlate 或 ParkingStatus)
-                    if (item.ParkingNumber && item.ParkingNumber.startsWith("B2F-")) {
-                        // 提取編號，例如 "B2F-4" -> "4"
-                        const spotNum = item.ParkingNumber.split('-')[1];
-                        // 判斷條件：只要有車牌號碼，就視為被占用
+                    // 1. 同時相容 B2F_ 或 B2F- 的開頭格式
+                    if (item.ParkingNumber && (item.ParkingNumber.startsWith("B2F_") || item.ParkingNumber.startsWith("B2F-"))) {
+                        
+                        // 2. 取得分隔符號之後的字串內容 (例如從 "B2F_063" 取得 "063")
+                        const rawNumPart = item.ParkingNumber.substring(4); 
+                        
+                        // 3. 關鍵修正：將 "063" 轉為數字 63，再轉回字串 "63"
+                        // 這樣就能把 100 號以前的前導零 (0) 全部去掉，與 GeoJSON 的 "name" 匹配
+                        const spotNum = parseInt(rawNumPart, 10).toString();
+                        
+                        // 4. 判斷是否有車輛占用
+                        // 只要有車牌，且車牌不是空的、不是 "Empty"，就視為占用
                         if (item.LicensePlate && item.LicensePlate !== "" && item.LicensePlate !== "Empty") {
                             occupiedSet.add(spotNum);
                         }
                     }
                 });
+                console.log("當前占用車位清單 (已去零):", Array.from(occupiedSet));
             }
         } catch (e) {
             console.error("無法獲取即時車位資料", e);
@@ -470,3 +477,4 @@
 </script>
 </body>
 </html>
+
