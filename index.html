@@ -69,22 +69,21 @@
             border: 2px solid #ddd;
         }
 
-        #compassBtn {
+        /* 按鈕群組 */
+        .floating-btns {
             position: absolute; top: 12px; right: 12px; z-index: 1000;
+            display: flex; flex-direction: column; gap: 12px;
+        }
+
+        .side-btn {
             width: 48px; height: 48px; background: white;
             border: 2px solid #ccc; border-radius: 50%;
             display: flex; align-items: center; justify-content: center;
-            font-size: 26px; cursor: pointer; box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+            font-size: 24px; cursor: pointer; box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+            text-decoration: none; color: black;
         }
         #compassBtn.active { background: #ff4757; color: white; border-color: #d63031; }
-        
-        #linkBtn {
-            position: absolute; top: 72px; right: 12px; z-index: 1000;
-            width: 48px; height: 48px; background: white;
-            border: 2px solid #ccc; border-radius: 50%;
-            display: flex; align-items: center; justify-content: center;
-            font-size: 26px; cursor: pointer; box-shadow: 0 2px 8px rgba(0,0,0,0.2);
-        }
+        #occupancyBtn.active { background: #2f3542; border-color: #000; color: white; }
         
         .popup-nav-container { text-align: center; padding: 5px; }
         .popup-btn {
@@ -98,8 +97,11 @@
 </head>
 <body>
 
-<div id="compassBtn" onclick="toggleCompass()">🧭</div>
-<div id="linkBtn"><a href="https://lmc10520.github.io/plate/" target="_blank" title="停車場現況" style="text-decoration: none;">🔗</a></div>
+<div class="floating-btns">
+    <div id="compassBtn" class="side-btn" onclick="toggleCompass()">🧭</div>
+    <a href="https://lmc10520.github.io/plate/" target="_blank" class="side-btn" title="停車場現況">🔗</a>
+    <div id="occupancyBtn" class="side-btn" onclick="toggleOccupancy()" title="顯示即時車位">🚗</div>
+</div>
 
 <div class="search-container">
     <div id="routeStatus"></div>
@@ -139,6 +141,8 @@
     }
 
     const imageBounds = [[22.62193, 120.34105], [22.62406, 120.34360]];
+    const API_URL = "https://analytics.sto-tek.com/_nodered/api/callExternalAPI?apiKey=495370807e744c8685b05ed5aabc3712&EAPI=API_Building_02&buildingID=kaohsiung_weiwuying&s=&m=lpr&p=0";
+    
     const roadNetwork = {
         "nodes": {
             "A1": [120.34124, 22.62270], "A3": [120.34137, 22.62307], "A4": [120.34149, 22.62344], "A5": [120.34164, 22.62391],
@@ -161,6 +165,8 @@
 
     let geojsonLayer, currentInput = "", activeSpot = null;
     let startData = null, endData = null, routeLine = null, startMarker = null, endMarker = null;
+    let isOccupancyMode = false;
+    let occupiedSet = new Set();
 
     const map = L.map('map', { center: [22.6231, 120.3425], zoom: 18, maxZoom: 24, minZoom: 15, zoomControl: false });
     L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', { opacity: 0.4, maxZoom: 24, maxNativeZoom: 19 }).addTo(map);
@@ -170,12 +176,13 @@
     fetch('parking.geojson').then(res => res.json()).then(data => {
         geojsonLayer = L.geoJSON(data, {
             pointToLayer: (f, l) => L.circleMarker(l, { radius: 3, fillColor: "#ff9800", color: "#000", weight: 1, opacity: 0.3, fillOpacity: 0.5 }),
-            style: () => ({ color: "#3388ff", opacity: 0.1, weight: 1, fillOpacity: 0 }),
+            style: (feature) => ({
+                color: "#3388ff", opacity: 0.1, weight: 1, fillColor: "#333", fillOpacity: 0 
+            }),
             onEachFeature: function(feature, layer) {
                 const name = feature.properties.name;
                 const roadId = feature.properties.road_id;
                 
-                // 如果具備 road_id，顯示導航按鈕 Popup
                 if (roadId) {
                     const popupContent = `
                         <div class="popup-nav-container">
@@ -191,6 +198,75 @@
             }
         }).addTo(map);
     });
+
+    // --- 即時車位顯示邏輯 ---
+    async function toggleOccupancy() {
+        const btn = document.getElementById('occupancyBtn');
+        isOccupancyMode = !isOccupancyMode;
+        
+        if (isOccupancyMode) {
+            btn.classList.add('active');
+            btn.innerHTML = "⌛"; // 讀取中
+            await fetchOccupancyData();
+            applyOccupancyStyle();
+            btn.innerHTML = "🚗";
+        } else {
+            btn.classList.remove('active');
+            resetOccupancyStyle();
+        }
+    }
+
+    async function fetchOccupancyData() {
+        try {
+            const response = await fetch(API_URL);
+            const result = await response.json();
+            occupiedSet.clear();
+            
+            // 假設 API 資料在 result.data 或直接在 result
+            const carData = result.data || result;
+            if (Array.isArray(carData)) {
+                carData.forEach(item => {
+                    // 比對 B2F-，並檢查是否有車 (假設有 LicensePlate 或 ParkingStatus)
+                    if (item.ParkingNumber && item.ParkingNumber.startsWith("B2F-")) {
+                        // 提取編號，例如 "B2F-4" -> "4"
+                        const spotNum = item.ParkingNumber.split('-')[1];
+                        // 判斷條件：只要有車牌號碼，就視為被占用
+                        if (item.LicensePlate && item.LicensePlate !== "" && item.LicensePlate !== "Empty") {
+                            occupiedSet.add(spotNum);
+                        }
+                    }
+                });
+            }
+        } catch (e) {
+            console.error("無法獲取即時車位資料", e);
+            alert("即時資料連線失敗");
+            isOccupancyMode = false;
+            document.getElementById('occupancyBtn').classList.remove('active');
+        }
+    }
+
+    function applyOccupancyStyle() {
+        if (!geojsonLayer) return;
+        geojsonLayer.eachLayer(layer => {
+            const spotName = layer.feature.properties.name.toString();
+            if (occupiedSet.has(spotName)) {
+                layer.setStyle({ fillOpacity: 0.7, fillColor: "#2d3436", color: "#000", opacity: 0.5 });
+            } else {
+                // 未占用的保持透明，但要確保原本的樣式不被洗掉
+                layer.setStyle({ fillOpacity: 0 });
+            }
+        });
+    }
+
+    function resetOccupancyStyle() {
+        if (!geojsonLayer) return;
+        geojsonLayer.eachLayer(layer => {
+            // 如果這格不是當前搜尋選中的格子，就重置
+            if (activeSpot !== layer) {
+                geojsonLayer.resetStyle(layer);
+            }
+        });
+    }
 
     // --- 輔助功能 ---
     function formatInput(val) {
@@ -304,7 +380,6 @@
         geojsonLayer.eachLayer(l => { if (l.feature.properties.name === name) targetLayer = l; });
         if (!targetLayer) return;
 
-        // 檢查 road_id
         if (!targetLayer.feature.properties.road_id) {
             alert("此區域不可作為起點或終點");
             return;
@@ -319,7 +394,15 @@
     
     function clearInput(fullReset = false) { 
         currentInput = ""; document.getElementById('combinedInput').value = ""; 
-        if (activeSpot) { geojsonLayer.resetStyle(activeSpot); activeSpot = null; }
+        if (activeSpot) { 
+            // 清除搜尋選中時，判斷是否要回到車位占用樣式
+            if (isOccupancyMode && occupiedSet.has(activeSpot.feature.properties.name.toString())) {
+                activeSpot.setStyle({ fillOpacity: 0.7, fillColor: "#2d3436", color: "#000" });
+            } else {
+                geojsonLayer.resetStyle(activeSpot); 
+            }
+            activeSpot = null; 
+        }
         if (fullReset) { 
             if (routeLine) map.removeLayer(routeLine);
             if (startMarker) map.removeLayer(startMarker);
@@ -343,7 +426,6 @@
         
         if (!target) return alert("無此編號: " + targetName);
 
-        // 檢查 road_id
         if (!target.feature.properties.road_id) {
             alert("此編號不可作為導航點（未配置路徑）");
             return;
@@ -373,7 +455,6 @@
         let found = false;
         geojsonLayer.eachLayer(l => {
             if (l.feature.properties.name.toString().toUpperCase() === targetName) {
-                // 搜尋也同步過濾具備 road_id 的有效點
                 if (l.feature.properties.road_id) {
                     const pos = l.getLatLng ? l.getLatLng() : l.getBounds().getCenter();
                     map.setView(pos, 21);
@@ -389,7 +470,3 @@
 </script>
 </body>
 </html>
-
-
-
-
