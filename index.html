@@ -385,6 +385,11 @@
         });
         if (!found && currentInput) alert("找不到具備路徑配置的有效編號: " + targetName);
     }
+
+    // 維修使用：點擊地圖任何地方，自動在控制台輸出經緯度
+    map.on('click', function(e) {
+        console.log(`"name": "請填號碼", "coords": [${e.latlng.lng}, ${e.latlng.lat}]`);
+    });
 </script>
 </body>
 </html>
