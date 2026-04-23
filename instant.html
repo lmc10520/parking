@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="description" content="停泊即時資訊">
+<title>停泊即時資訊</title>
+<style>
+:root{--red:#ff6263;--bg:#f2f2f2;--card:#fff;--text:#222;--muted:#888;--radius:10px}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;padding:14px;font-size:15px}
+h1{text-align:center;font-size:1.2em;font-weight:700;margin:10px 0 4px}
+#status{text-align:center;color:var(--muted);font-size:0.78em;margin-bottom:14px}
+
+/* ── 樓層卡片 ── */
+.card{background:var(--card);border-radius:var(--radius);margin-bottom:12px;overflow:hidden;box-shadow:0 1px 6px rgba(0,0,0,.08)}
+.card-head{background:var(--red);color:#fff;padding:7px 14px;font-weight:700;font-size:1em;display:flex;justify-content:space-between;align-items:center}
+.card-head span{font-size:0.82em;font-weight:400;opacity:.9}
+table{width:100%;border-collapse:collapse}
+td,th{padding:9px 12px;text-align:center;border-bottom:1px solid #eee;font-size:0.9em}
+th{background:#fafafa;color:var(--muted);font-weight:600;font-size:0.78em;letter-spacing:.04em}
+td:first-child,th:first-child{text-align:left}
+.avail{color:#2e7d32;font-weight:700}
+.occ{color:var(--red)}
+
+/* ── 搜尋區 ── */
+.search-card{background:var(--card);border-radius:var(--radius);padding:16px;box-shadow:0 1px 6px rgba(0,0,0,.08);margin-bottom:16px}
+.search-card h2{font-size:0.95em;font-weight:700;margin-bottom:10px;color:var(--text)}
+.input-row{display:flex;gap:8px}
+#plateInput{flex:1;padding:10px 12px;border:1px solid #ddd;border-radius:6px;font-size:1em;outline:none}
+#plateInput:focus{border-color:var(--red)}
+#search-btn{background:var(--red);color:#fff;border:none;padding:10px 18px;border-radius:6px;font-weight:700;font-size:0.95em;cursor:pointer;white-space:nowrap}
+
+/* ── 搜尋結果 ── */
+#result{margin-top:12px}
+.result-row{display:flex;justify-content:space-between;align-items:center;padding:10px 2px;border-bottom:1px solid #eee;font-size:0.95em}
+.result-row:last-child{border-bottom:none}
+.result-plate{font-weight:600}
+.result-spot{color:var(--red);font-weight:700;font-size:1.1em}
+.no-result{color:#c62828;font-size:0.9em;padding-top:6px}
+.hint{color:var(--muted);font-size:0.88em;padding-top:6px}
+
+footer{text-align:center;font-size:0.7em;color:#bbb;margin-top:4px;padding-bottom:30px}
+footer a{color:#bbb;text-decoration:none}
+</style>
+</head>
+<body>
+
+<h1>停泊即時資訊</h1>
+<div id="status">連線中…</div>
+
+<!-- B2F -->
+<div class="card">
+  <div class="card-head">B2F <span id="head-b2">—</span></div>
+  <table>
+    <thead><tr><th>車位類型</th><th>總格數</th><th>已佔用</th><th>剩餘</th></tr></thead>
+    <tbody>
+      <tr><td>一般</td><td id="tot-b2-gen">—</td><td class="occ" id="occ-b2-gen">—</td><td class="avail" id="avl-b2-gen">—</td></tr>
+      <tr><td>身障</td><td>18</td><td class="occ" id="occ-b2-dis">—</td><td class="avail" id="avl-b2-dis">—</td></tr>
+      <tr><td>親子</td><td>11</td><td class="occ" id="occ-b2-par">—</td><td class="avail" id="avl-b2-par">—</td></tr>
+      <tr><td>綠能</td><td>15</td><td class="occ" id="occ-b2-ev">—</td><td class="avail" id="avl-b2-ev">—</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- B1F -->
+<div class="card">
+  <div class="card-head">B1F <span id="head-b1">—</span></div>
+  <table>
+    <thead><tr><th>車位類型</th><th>總格數</th><th>已佔用</th><th>剩餘</th></tr></thead>
+    <tbody>
+      <tr><td>一般</td><td id="tot-b1-gen">—</td><td class="occ" id="occ-b1-gen">—</td><td class="avail" id="avl-b1-gen">—</td></tr>
+      <tr><td>身障</td><td>5</td><td class="occ" id="occ-b1-dis">—</td><td class="avail" id="avl-b1-dis">—</td></tr>
+      <tr><td>親子</td><td>4</td><td class="occ" id="occ-b1-par">—</td><td class="avail" id="avl-b1-par">—</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- 搜尋 -->
+<div class="search-card">
+  <h2>🔍 尋車</h2>
+  <div class="input-row">
+    <input type="tel" id="plateInput" inputmode="numeric" pattern="[0-9]*" placeholder="輸入車牌數字"
+      onkeyup="if(event.keyCode===13)searchCar()">
+    <button id="search-btn" onclick="searchCar()">搜尋</button>
+  </div>
+  <div id="result"></div>
+</div>
+
+<footer>本資料為公益性質之使用，非營利且不涉及任何商業行為。如有涉及著作權之資料來源及其內容，皆屬原權利人所有，所有資訊皆源自網路上搜尋之開放資料進行統計呈現。</footer>
+
+<script>
+const API="https://analytics.sto-tek.com/_nodered/api/callExternalAPI?apiKey=495370807e744c8685b05ed5aabc3712&EAPI=API_Building_02&buildingID=kaohsiung_weiwuying&s=&m=lpr&p=0";
+const TOTAL_B1=221,TOTAL_B2=495;
+const SPECIAL_B2={dis:18,par:11,ev:15};
+const SPECIAL_B1={dis:5,par:4,ev:0};
+let allData=[];
+
+function set(id,v){const e=document.getElementById(id);if(e)e.textContent=v;}
+
+async function update(){
+  try{
+    set('status','更新中…');
+    const r=await fetch(API);
+    const j=await r.json();
+    if(j&&j.data)allData=j.data;
+
+    const now=new Date().toLocaleTimeString('zh-TW',{hour:'2-digit',minute:'2-digit'});
+    set('status','更新：'+now+'（'+allData.length+' 筆）');
+
+    const b2=allData.filter(x=>x.Floor==='B2F');
+    const b1=allData.filter(x=>x.Floor==='B1F');
+    const occ=d=>d.LicensePlate&&d.LicensePlate!=='NONE';
+    const has=(d,k)=>occ(d)&&d.Type&&d.Type.includes(k);
+
+    const b2Dis=b2.filter(d=>has(d,'身障')).length;
+    const b2Par=b2.filter(d=>has(d,'親子')).length;
+    const b2Ev=b2.filter(d=>occ(d)&&d.Type&&(d.Type.includes('電動')||d.Type.includes('綠能'))).length;
+    const b2Tot=b2.filter(occ).length;
+    const b2Gen=b2Tot-b2Dis-b2Par-b2Ev;
+    const b2GenTot=TOTAL_B2-SPECIAL_B2.dis-SPECIAL_B2.par-SPECIAL_B2.ev;
+
+    set('head-b2',`已停 ${b2Tot} / ${TOTAL_B2}，佔 ${(b2Tot/TOTAL_B2*100).toFixed(0)}%`);
+    set('tot-b2-gen',b2GenTot); set('occ-b2-gen',b2Gen); set('avl-b2-gen',b2GenTot-b2Gen);
+    set('occ-b2-dis',b2Dis); set('avl-b2-dis',SPECIAL_B2.dis-b2Dis);
+    set('occ-b2-par',b2Par); set('avl-b2-par',SPECIAL_B2.par-b2Par);
+    set('occ-b2-ev',b2Ev);  set('avl-b2-ev',SPECIAL_B2.ev-b2Ev);
+
+    const b1Dis=b1.filter(d=>has(d,'身障')).length;
+    const b1Par=b1.filter(d=>has(d,'親子')).length;
+    const b1Tot=b1.filter(occ).length;
+    const b1Gen=b1Tot-b1Dis-b1Par;
+    const b1GenTot=TOTAL_B1-SPECIAL_B1.dis-SPECIAL_B1.par;
+
+    set('head-b1',`已停 ${b1Tot} / ${TOTAL_B1}，佔 ${(b1Tot/TOTAL_B1*100).toFixed(0)}%`);
+    set('tot-b1-gen',b1GenTot); set('occ-b1-gen',b1Gen); set('avl-b1-gen',b1GenTot-b1Gen);
+    set('occ-b1-dis',b1Dis); set('avl-b1-dis',SPECIAL_B1.dis-b1Dis);
+    set('occ-b1-par',b1Par); set('avl-b1-par',SPECIAL_B1.par-b1Par);
+  }catch(e){set('status','連線異常，請稍後再試');}
+}
+
+function searchCar(){
+  const q=document.getElementById('plateInput').value.trim();
+  const out=document.getElementById('result');
+  if(!q){out.innerHTML='<div class="hint">請輸入車牌數字</div>';return;}
+  if(q.length<2){out.innerHTML='<div class="hint">請輸入至少 2 碼</div>';return;}
+  const hits=allData.filter(d=>d.LicensePlate&&d.LicensePlate!=='NONE'&&d.LicensePlate.toString().includes(q));
+  if(!hits.length){out.innerHTML=`<div class="no-result">找不到含「${q}」的車牌</div>`;return;}
+  out.innerHTML=hits.map(c=>`<div class="result-row"><span class="result-plate">${c.LicensePlate}</span><span class="result-spot">${c.Floor}　${c.ParkingNumber}</span></div>`).join('');
+}
+
+update();
+setInterval(update,120000);
+</script>
+</body>
+</html>
