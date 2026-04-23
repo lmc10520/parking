@@ -20525,6 +20525,38 @@
       {
          "type":"Feature",
          "properties":{
+            "name":"A07",
+            "type":"pillar",
+            "road_id": "C1D1",
+            "description":""
+         },
+         "geometry":{
+            "type":"Point",
+            "coordinates":[
+               120.34282609820366,
+               22.622123218425983
+            ]
+         }
+      },
+      {
+         "type":"Feature",
+         "properties":{
+            "name":"A09",
+            "type":"pillar",
+            "road_id": "C1D1",
+            "description":""
+         },
+         "geometry":{
+            "type":"Point",
+            "coordinates":[
+               120.34289650619031,
+               22.622103721148513
+            ]
+         }
+      },
+      {
+         "type":"Feature",
+         "properties":{
             "name":"A11",
             "type":"pillar",
             "road_id": "C1D1",
@@ -21015,6 +21047,38 @@
             "coordinates":[
                120.34279793500902,
                22.62240298857913
+            ]
+         }
+      },
+      {
+         "type":"Feature",
+         "properties":{
+            "name":"A36",
+            "type":"pillar",
+            "road_id": "C2D2",
+            "description":""
+         },
+         "geometry":{
+            "type":"Point",
+            "coordinates":[
+               120.34293942153455,
+               22.622339854656254
+            ]
+         }
+      },
+      {
+         "type":"Feature",
+         "properties":{
+            "name":"A38",
+            "type":"pillar",
+            "road_id": "C2D2",
+            "description":""
+         },
+         "geometry":{
+            "type":"Point",
+            "coordinates":[
+               120.34301318228246,
+               22.622297765358237
             ]
          }
       },
