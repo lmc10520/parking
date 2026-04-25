@@ -171,7 +171,7 @@
 
 <div class="floating-btns">
     <div id="compassBtn" class="side-btn" onclick="toggleCompass()">🧭</div>
-    <a href="javascript:void(0)" id="openInstant" class="side-btn" title="停車場現況">🔗</a>
+    <a href="javascript:void(0)" id="openInstant" class="side-btn" title="停泊即時資訊">🔗</a>
     <div id="occupancyBtn" class="side-btn" onclick="toggleOccupancy()" title="顯示即時車位">🚥</div>
 </div>
 
@@ -209,7 +209,9 @@
 <div id="modalOverlay" class="modal-overlay">
     <div class="modal-content">
         <div class="modal-header">
-            <span>停車場現況</span>
+            <span>停泊即時資訊</span>
+            <div class="modal-controls">
+            <button id="refreshModal" title="重新整理" style="background:none; border:none; cursor:pointer; font-size:20px; margin-right:10px;">↻</button>
             <button id="closeModal">&times;</button>
         </div>
         <div class="modal-body">
@@ -616,12 +618,19 @@ async function refreshOccupancy() {
         const modal = document.getElementById('modalOverlay');
         const openBtn = document.getElementById('openInstant');
         const closeBtn = document.getElementById('closeModal');
-    
+            
+        // 找到 iframe 元素
+        const modalIframe = document.querySelector('#modalOverlay iframe');
+            
         // 打開彈窗
         openBtn.addEventListener('click', function(e) {
             e.preventDefault();
-            modal.style.display = 'block';
+
+            // 設定 src 加上時間戳記，防止瀏覽器快取舊資料
+            const originalSrc = "instant.html";
+            modalIframe.src = originalSrc + "?t=" + new Date().getTime();
             // 選擇性：防止後方背景捲動
+            modal.style.display = 'block';
             document.body.style.overflow = 'hidden';
         });
     
@@ -629,6 +638,14 @@ async function refreshOccupancy() {
         closeBtn.addEventListener('click', function() {
             modal.style.display = 'none';
             document.body.style.overflow = 'auto';
+        });
+
+        // 重新整理（F5）
+        const refreshBtn = document.getElementById('refreshModal');
+            
+        refreshBtn.addEventListener('click', function() {
+            // 讓 iframe 重新整理
+            modalIframe.src = "instant.html?t=" + new Date().getTime();
         });
     
         // 關閉彈窗（按背景）
