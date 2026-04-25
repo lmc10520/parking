@@ -93,13 +93,85 @@
         }
         .popup-btn.from { background: #0984e3; color: white; border: none; }
         .popup-btn.to { background: #d63031; color: white; border: none; }
+
+        /* 彈出式視窗背景（遮罩） */
+        .modal-overlay {
+            display: none; /* 預設隱藏 */
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.6); /* 半透明黑 */
+            z-index: 9999; /* 確保在最上層 */
+            backdrop-filter: blur(4px); /* 背景模糊，增加質感 */
+        }
+        
+        /* 彈出式視窗主體 */
+        .modal-content {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 90%;
+            max-width: 800px; /* 最大寬度 */
+            height: 80vh; /* 高度佔螢幕 80% */
+            background: white;
+            border-radius: 12px;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+        }
+        
+        /* 彈出式視窗標題列 */
+        .modal-header {
+            padding: 15px 20px;
+            background: #f8f9fa;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid #ddd;
+            font-weight: bold;
+        }
+        
+        #closeModal {
+            background: none;
+            border: none;
+            font-size: 24px;
+            cursor: pointer;
+            color: #666;
+        }
+        
+        #closeModal:hover {
+            color: #000;
+        }
+        
+        /* 內嵌網頁區域 */
+        .modal-body {
+            flex: 1;
+        }
+        
+        .modal-body iframe {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+        
+        /* 手機版適應 */
+        @media (max-width: 600px) {
+            .modal-content {
+                width: 95%;
+                height: 90vh;
+            }
+        }
     </style>
 </head>
 <body>
 
 <div class="floating-btns">
     <div id="compassBtn" class="side-btn" onclick="toggleCompass()">🧭</div>
-    <a href="instant.html" target="_blank" class="side-btn" title="停車場現況">🔗</a>
+    <a href="javascript:void(0)" id="openInstant" class="side-btn" title="停車場現況">🔗</a>
     <div id="occupancyBtn" class="side-btn" onclick="toggleOccupancy()" title="顯示即時車位">🚥</div>
 </div>
 
@@ -133,6 +205,19 @@
     </div>
 </div>
 
+<!-- 新增彈出式視窗結構 -->
+<div id="modalOverlay" class="modal-overlay">
+    <div class="modal-content">
+        <div class="modal-header">
+            <span>停車場現況</span>
+            <button id="closeModal">&times;</button>
+        </div>
+        <div class="modal-body">
+            <iframe src="instant.html" frameborder="0"></iframe>
+        </div>
+    </div>
+</div>
+    
 <div id="map"></div>
 
 <script>
@@ -525,6 +610,36 @@ async function refreshOccupancy() {
     map.on('click', function(e) {
         console.log(`"name": "請填號碼", "coords": [${e.latlng.lng}, ${e.latlng.lat}]`);
     });
+
+    //新增彈出式視窗
+        document.addEventListener('DOMContentLoaded', function() {
+        const modal = document.getElementById('modalOverlay');
+        const openBtn = document.getElementById('openInstant');
+        const closeBtn = document.getElementById('closeModal');
+    
+        // 打開彈窗
+        openBtn.addEventListener('click', function(e) {
+            e.preventDefault();
+            modal.style.display = 'block';
+            // 選擇性：防止後方背景捲動
+            document.body.style.overflow = 'hidden';
+        });
+    
+        // 關閉彈窗（按 X）
+        closeBtn.addEventListener('click', function() {
+            modal.style.display = 'none';
+            document.body.style.overflow = 'auto';
+        });
+    
+        // 關閉彈窗（按背景）
+        window.addEventListener('click', function(e) {
+            if (e.target === modal) {
+                modal.style.display = 'none';
+                document.body.style.overflow = 'auto';
+            }
+        });
+    });
+    
 </script>
 </body>
 </html>
