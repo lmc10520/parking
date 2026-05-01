@@ -174,25 +174,21 @@
         }
         
         #mapContainer {
-            overflow: hidden;
-            background: #f0f0f0;
-            touch-action: none; /* 必須保留，否則手機無法縮放 */
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-        
-        #panzoomElement {
-            width: 100%;
+            touch-action: none;
             cursor: grab;
         }
         
+        #panzoomElement {
+            /* 這裡不用設 overflow，讓它成為一個巨大的手勢感應區 */
+            will-change: transform;
+        }
+        
         #targetSvg {
-            /* 這是最重要的：寬度設為 100%，高度自動 */
-            width: 100%;
-            height: auto;
-            display: block;
-            /* 移除所有 image-rendering 屬性，讓瀏覽器預設處理向量 */
+            /* 保持 display: block 確保渲染解析度 */
+            display: block; 
+            /* 增加一點 drop-shadow 增加立體感 */
+            filter: drop-shadow(0 0 10px rgba(0,0,0,0.1));
+            pointer-events: none; /* 讓點擊穿透圖片，由底下的 panzoomElement 統一接收 */
         }
     </style>
 </head>
@@ -258,9 +254,11 @@
             <span>B1演職人員停車場平面圖</span>
             <button id="closeMapModal" style="background:none; border:none; font-size:24px; cursor:pointer;">&times;</button>
         </div>
-        <div id="mapContainer" class="modal-body" style="overflow: hidden; background: #eee; touch-action: none; position: relative;">
-            <div id="panzoomElement" style="display: inline-block; width: 100%; transform-origin: 0 0;">
-                <img id="targetSvg" src="B1-20260501.svg" alt="B1演職人員停車場平面圖" style="width: 100%; height: auto; display: block;">
+        <div id="mapContainer" class="modal-body" style="background: #f0f0f0; overflow: hidden; position: relative;">
+            <div id="panzoomElement" style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center;">
+                <!-- 真正的 SVG 圖片 -->
+                <img id="targetSvg" src="B1-20260501.svg" alt="B1演職人員停車場平面圖" 
+                     style="display: block; max-width: 95%; max-height: 95%; width: auto; height: auto;">
             </div>
         </div>
     </div>
@@ -712,14 +710,14 @@ async function refreshOccupancy() {
     
             if (!openMapBtn || !mapModal || !panElement || typeof Panzoom === 'undefined') return;
     
-            // 1. 初始化 Panzoom (回歸最穩定參數)
+            // 1. 初始化
             const pz = Panzoom(panElement, {
-                maxScale: 10,
-                minScale: 0.5,
+                maxScale: 15,
+                minScale: 0.1,
                 step: 0.3,
                 animate: true,
                 duration: 200,
-                contain: 'outside' // 改回 outside，這樣縮放時手感會比較紮實
+                contain: null // 設為 null，使用者可以自由拖拉到任何角落，不會被鎖死
             });
     
             // 2. 滾輪縮放
@@ -730,10 +728,12 @@ async function refreshOccupancy() {
                 mapModal.style.display = 'block';
                 document.body.style.overflow = 'hidden';
                 
-                // 3. 簡單重設：讓 CSS 的 width: 100% 發揮作用
+                // 3. 初始重設：pz.reset() 會參考 CSS 的寬高，
+                // 由於我們 CSS 設了 max-width/height 95%，圖片會完美置中出現。
                 setTimeout(() => {
                     pz.reset({ animate: false });
-                }, 50);
+                    pz.pan(0, 0, { animate: false });
+                }, 100);
             };
     
             const closeMap = () => {
@@ -743,10 +743,7 @@ async function refreshOccupancy() {
     
             openMapBtn.addEventListener('click', openMap);
             if (closeMapBtn) closeMapBtn.addEventListener('click', closeMap);
-    
-            mapModal.addEventListener('click', (e) => {
-                if (e.target === mapModal) closeMap();
-            });
+            mapModal.addEventListener('click', (e) => { if (e.target === mapModal) closeMap(); });
         });
     })();
     
