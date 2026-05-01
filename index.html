@@ -9,6 +9,7 @@
     
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/@panzoom/panzoom@4.5.1/dist/panzoom.min.js"></script>
     <link rel="manifest" href="manifest.json">
     <link rel="icon" href="icon.png" type="image/png">
     <link rel="apple-touch-icon" href="icon.png">
@@ -171,8 +172,9 @@
 
 <div class="floating-btns">
     <div id="compassBtn" class="side-btn" onclick="toggleCompass()">🧭</div>
+    <a href="javascript:void(0)" id="openMap" class="side-btn" title="B1演職人員停車場">🗺️</a>
     <a href="javascript:void(0)" id="openInstant" class="side-btn" title="停泊即時資訊">🔗</a>
-    <div id="occupancyBtn" class="side-btn" onclick="toggleOccupancy()" title="顯示即時車位">🚥</div>
+    <div id="occupancyBtn" class="side-btn" onclick="toggleOccupancy()" title="顯示即時車位">🚥</div>    
 </div>
 
 <div class="search-container">
@@ -205,7 +207,7 @@
     </div>
 </div>
 
-<!-- 新增彈出式視窗結構 -->
+<!-- 停泊現況彈出式視窗結構 -->
 <div id="modalOverlay" class="modal-overlay" style="display:none;">
     <div class="modal-content">
         <div class="modal-header">
@@ -217,6 +219,21 @@
         </div>
         <div class="modal-body" style="flex:1;">
             <iframe id="instantIframe" src="" frameborder="0" style="width:100%; height:100%;"></iframe>
+        </div>
+    </div>
+</div>
+
+<!-- B1演職人員停車場平面圖彈出式視窗結構 -->
+<div id="mapModalOverlay" class="modal-overlay">
+    <div class="modal-content">
+        <div class="modal-header">
+            <span>B1演職人員停車場平面圖</span>
+            <button id="closeMapModal" style="background:none; border:none; font-size:24px; cursor:pointer;">&times;</button>
+        </div>
+        <div class="modal-body" id="mapContainer" style="overflow: hidden; cursor: grab;">
+            <div id="panzoomElement">
+                <img src="B1-20260501.svg" alt="B1演職人員停車場平面圖" style="width: 100%; height: auto;">
+            </div>
         </div>
     </div>
 </div>
@@ -661,6 +678,52 @@ async function refreshOccupancy() {
             }
         });
     })();
+
+    // 新增B1停車場透過彈出式視窗顯示靜態平面圖
+    document.addEventListener('DOMContentLoaded', function() {
+        const mapModal = document.getElementById('mapModalOverlay');
+        const openMapBtn = document.getElementById('openMap');
+        const closeMapBtn = document.getElementById('closeMapModal');
+        const panElement = document.getElementById('panzoomElement');
+
+        // 1. 初始化 Panzoom 縮放功能
+        const panzoom = Panzoom(panElement, {
+            maxScale: 5,   // 最大放大 5 倍
+            minScale: 1,   // 最小維持 1 倍
+            contain: 'outside', // 拖移時會自動限制在邊界，不會飄走
+            step: 0.3      // 縮放速度
+        });
+
+        // 2. 啟用滑鼠滾輪縮放 (電腦版也能用)
+        panElement.parentElement.addEventListener('wheel', panzoom.zoomWithWheel);
+
+        // 3. 打開地圖彈窗
+        openMapBtn.addEventListener('click', function(e) {
+            e.preventDefault();
+            mapModal.style.display = 'block';
+            document.body.style.overflow = 'hidden';
+            
+            // 打開後重設縮放位置，確保地圖置中
+            setTimeout(() => {
+                panzoom.reset();
+            }, 10);
+        });
+
+        // 4. 關閉地圖彈窗
+        function closeMap() {
+            mapModal.style.display = 'none';
+            document.body.style.overflow = 'auto';
+        }
+
+        closeMapBtn.addEventListener('click', closeMap);
+        
+        // 點擊背景也能關閉
+        window.addEventListener('click', function(e) {
+            if (e.target === mapModal) {
+                closeMap();
+            }
+        });
+    });
     
 </script>
 </body>
