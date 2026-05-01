@@ -172,23 +172,35 @@
             image-rendering: -webkit-optimize-contrast;
             will-change: transform; /* 提醒瀏覽器準備使用 GPU 加速 */
         }
-        
         #mapContainer {
+            overflow: hidden;
+            background: #f0f0f0;
             touch-action: none;
             cursor: grab;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            height: 100%;
         }
-        
+        #mapContainer:active {
+            cursor: grabbing;
+        }
         #panzoomElement {
-            /* 這裡不用設 overflow，讓它成為一個巨大的手勢感應區 */
+            display: inline-block;
             will-change: transform;
+            /* 解決鋸齒，強制 3D 加速渲染 */
+            transform-style: preserve-3d;
+            -webkit-font-smoothing: antialiased;
         }
-        
         #targetSvg {
-            /* 保持 display: block 確保渲染解析度 */
-            display: block; 
-            /* 增加一點 drop-shadow 增加立體感 */
-            filter: drop-shadow(0 0 10px rgba(0,0,0,0.1));
-            pointer-events: none; /* 讓點擊穿透圖片，由底下的 panzoomElement 統一接收 */
+            display: block;
+            width: 100vw; /* 初始寬度直接撐滿視窗 */
+            height: auto;
+            pointer-events: none;
+        }
+        .modal-overlay {
+            cursor: default;
         }
     </style>
 </head>
@@ -710,28 +722,33 @@ async function refreshOccupancy() {
     
             if (!openMapBtn || !mapModal || !panElement || typeof Panzoom === 'undefined') return;
     
-            // 1. 初始化
+            // 1. 初始化 Panzoom
             const pz = Panzoom(panElement, {
-                maxScale: 15,
-                minScale: 0.1,
-                step: 0.3,
+                maxScale: 20,
+                minScale: 0.5,
+                step: 0.8,
                 animate: true,
-                duration: 200,
-                contain: null // 設為 null，使用者可以自由拖拉到任何角落，不會被鎖死
+                duration: 250,
+                contain: null
             });
     
             // 2. 滾輪縮放
-            mapContainer.addEventListener('wheel', pz.zoomWithWheel);
+            mapContainer.addEventListener('wheel', (e) => {
+                pz.zoomWithWheel(e, { step: 0.2 });
+            });
     
             const openMap = (e) => {
                 e.preventDefault();
                 mapModal.style.display = 'block';
                 document.body.style.overflow = 'hidden';
                 
-                // 3. 初始重設：pz.reset() 會參考 CSS 的寬高，
-                // 由於我們 CSS 設了 max-width/height 95%，圖片會完美置中出現。
                 setTimeout(() => {
-                    pz.reset({ animate: false });
+                    const containerWidth = mapContainer.clientWidth;
+                    const img = document.getElementById('targetSvg');
+                    const imgWidth = img.offsetWidth;
+                    const fillWidthScale = containerWidth / imgWidth;
+                    
+                    pz.zoom(fillWidthScale, { animate: false });
                     pz.pan(0, 0, { animate: false });
                 }, 100);
             };
@@ -743,7 +760,29 @@ async function refreshOccupancy() {
     
             openMapBtn.addEventListener('click', openMap);
             if (closeMapBtn) closeMapBtn.addEventListener('click', closeMap);
-            mapModal.addEventListener('click', (e) => { if (e.target === mapModal) closeMap(); });
+            let mousedownTarget = null;
+    
+            // 當滑鼠按下時，紀錄目標
+            mapModal.addEventListener('mousedown', (e) => {
+                mousedownTarget = e.target;
+            });
+    
+            // 當滑鼠放開時，只有在按下與放開都是「遮罩本身」時才關閉
+            mapModal.addEventListener('mouseup', (e) => {
+                if (mousedownTarget === mapModal && e.target === mapModal) {
+                    closeMap();
+                }
+                mousedownTarget = null;
+            });
+    
+            // 阻止地圖容器內的動作向上傳遞給遮罩
+            mapContainer.addEventListener('mousedown', (e) => {
+                e.stopPropagation();
+            });
+            mapContainer.addEventListener('mouseup', (e) => {
+                e.stopPropagation();
+            });
+            // ---------------------------
         });
     })();
     
