@@ -172,6 +172,25 @@
             image-rendering: -webkit-optimize-contrast;
             will-change: transform; /* 提醒瀏覽器準備使用 GPU 加速 */
         }
+        
+        #mapContainer {
+            touch-action: none; /* 關鍵：禁止瀏覽器原生處理手勢，交給 Panzoom */
+            background-color: #f0f0f0;
+            user-select: none;
+            -webkit-user-drag: none;
+        }
+        
+        #panzoomElement {
+            display: inline-block;
+            width: 100%;
+        }
+        
+        #panzoomElement img {
+            pointer-events: none; /* 讓事件穿透圖片，由 Panzoom 統一接收 */
+            display: block;
+            width: 100%;
+            height: auto;
+        }
     </style>
 </head>
 <body>
@@ -690,36 +709,53 @@ async function refreshOccupancy() {
     
             if (!openMapBtn || !mapModal || !panElement || typeof Panzoom === 'undefined') return;
     
-            // 1. 初始化 Panzoom
+            // 1. 初始化 Panzoom (移除容易衝突的 canvas: true)
             const pz = Panzoom(panElement, {
-                maxScale: 8,
-                minScale: 0.5,
-                contain: 'inside',
-                step: 0.15, // 調整步長
-                canvas: true,
+                maxScale: 10,       // 放大上限
+                minScale: 0.1,      // 縮小下限，設小一點避免計算衝突
+                step: 0.2,          // 縮放步長
                 animate: true,
                 duration: 200,
-                easing: "ease-out"
+                contain: 'outside', // 改為 outside 縮放會比較直覺，不會在邊界彈跳
+                cursor: 'move'
             });
     
-            // 2. 啟用滾輪縮放
+            // 2. 修正：將事件綁定在 Container 上，並傳遞給 Panzoom
+            // 這能確保手指在容器內任何地方張開都能縮放
             mapContainer.addEventListener('wheel', pz.zoomWithWheel);
+            
+            // 強制啟用手指縮放支援
+            panElement.addEventListener('touchstart', (e) => {
+                if (e.touches.length === 2) e.preventDefault(); // 防止雙指縮放時觸發網頁縮放
+            }, { passive: false });
     
             const openMap = (e) => {
                 e.preventDefault();
                 mapModal.style.display = 'block';
                 document.body.style.overflow = 'hidden';
                 
-                // 自動適應寬度
+                // 3. 改進的自動適應寬度邏輯
                 setTimeout(() => {
                     const containerWidth = mapContainer.clientWidth;
+                    const containerHeight = mapContainer.clientHeight;
                     const img = panElement.querySelector('img');
-                    const imgWidth = img.naturalWidth || img.clientWidth || 800;
-                    const initialScale = containerWidth / imgWidth;
                     
+                    // 確保能抓到圖片真實尺寸
+                    const imgWidth = img.naturalWidth || img.offsetWidth || 800;
+                    const imgHeight = img.naturalHeight || img.offsetHeight || 600;
+    
+                    // 計算適合寬度或高度的比例 (以完整顯示整張圖為準)
+                    const scaleW = containerWidth / imgWidth;
+                    const scaleH = containerHeight / imgHeight;
+                    const initialScale = Math.min(scaleW, scaleH) * 0.9; // 取小值並打 9 折留點邊距
+    
                     pz.zoom(initialScale, { animate: false });
-                    pz.pan(0, 0, { animate: false });
-                }, 100);
+                    
+                    // 置中對齊
+                    setTimeout(() => {
+                        pz.pan(0, 0, { animate: false });
+                    }, 10);
+                }, 150); // 稍微加長延遲，確保 modal 動畫完成後再計算
             };
     
             const closeMap = () => {
