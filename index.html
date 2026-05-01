@@ -168,9 +168,16 @@
         }
         
         /* 針對 SVG/像素地圖優化，確保圖片在縮小時不會模糊 */
-        #panzoomElement img, #panzoomElement svg {
-            image-rendering: -webkit-optimize-contrast;
-            will-change: transform; /* 提醒瀏覽器準備使用 GPU 加速 */
+        #panzoomElement {
+            display: inline-block;
+            transform-origin: 0 0;
+        }
+        #targetSvg {
+            display: block;
+            width: 100vw;
+            height: auto;
+            pointer-events: none;
+            image-rendering: auto; 
         }
         #mapContainer {
             overflow: hidden;
@@ -185,19 +192,6 @@
         }
         #mapContainer:active {
             cursor: grabbing;
-        }
-        #panzoomElement {
-            display: inline-block;
-            will-change: transform;
-            /* 解決鋸齒，強制 3D 加速渲染 */
-            transform-style: preserve-3d;
-            -webkit-font-smoothing: antialiased;
-        }
-        #targetSvg {
-            display: block;
-            width: 100vw; /* 初始寬度直接撐滿視窗 */
-            height: auto;
-            pointer-events: none;
         }
         .modal-overlay {
             cursor: default;
@@ -268,9 +262,7 @@
         </div>
         <div id="mapContainer" class="modal-body" style="background: #f0f0f0; overflow: hidden; position: relative;">
             <div id="panzoomElement" style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center;">
-                <!-- 真正的 SVG 圖片 -->
-                <img id="targetSvg" src="B1-20260501.svg" alt="B1演職人員停車場平面圖" 
-                     style="display: block; max-width: 95%; max-height: 95%; width: auto; height: auto;">
+                <img id="targetSvg" src="" alt="B1演職人員停車場平面圖">
             </div>
         </div>
     </div>
@@ -719,12 +711,12 @@ async function refreshOccupancy() {
             const closeMapBtn = document.getElementById('closeMapModal');
             const panElement = document.getElementById('panzoomElement');
             const mapContainer = document.getElementById('mapContainer');
+            const img = document.getElementById('targetSvg'); // 取得圖片元素
     
             if (!openMapBtn || !mapModal || !panElement || typeof Panzoom === 'undefined') return;
     
-            // 1. 初始化 Panzoom
             const pz = Panzoom(panElement, {
-                maxScale: 20,
+                maxScale: 15,
                 minScale: 0.5,
                 step: 0.8,
                 animate: true,
@@ -732,57 +724,54 @@ async function refreshOccupancy() {
                 contain: null
             });
     
-            // 2. 滾輪縮放
             mapContainer.addEventListener('wheel', (e) => {
                 pz.zoomWithWheel(e, { step: 0.2 });
             });
     
             const openMap = (e) => {
                 e.preventDefault();
+                
+                // 1. 先打開視窗 (讓瀏覽器知道容器大小)
                 mapModal.style.display = 'block';
                 document.body.style.overflow = 'hidden';
                 
-                setTimeout(() => {
-                    const containerWidth = mapContainer.clientWidth;
-                    const img = document.getElementById('targetSvg');
-                    const imgWidth = img.offsetWidth;
-                    const fillWidthScale = containerWidth / imgWidth;
-                    
-                    pz.zoom(fillWidthScale, { animate: false });
-                    pz.pan(0, 0, { animate: false });
-                }, 100);
+                // 2. 指派 src (強制重新載入向量資料)
+                if (img.src === "" || img.src !== window.location.origin + "/B1-20260501.svg") {
+                    img.src = "B1-20260501.svg";
+                }
+    
+                // 3. 等待圖片載入完成後再計算縮放
+                img.onload = () => {
+                    setTimeout(() => {
+                        const containerWidth = mapContainer.clientWidth;
+                        const imgWidth = img.offsetWidth;
+                        const fillWidthScale = containerWidth / imgWidth;
+                        
+                        pz.zoom(fillWidthScale, { animate: false });
+                        pz.pan(0, 0, { animate: false });
+                    }, 50);
+                };
             };
     
             const closeMap = () => {
                 mapModal.style.display = 'none';
                 document.body.style.overflow = 'auto';
+                // 可選：關閉時清空 src，確保下次開啟又是全新的渲染
+                // img.src = ""; 
             };
     
             openMapBtn.addEventListener('click', openMap);
             if (closeMapBtn) closeMapBtn.addEventListener('click', closeMap);
+    
+            // 防誤觸邏輯 (保持原本的 mousedown/mouseup 判定)
             let mousedownTarget = null;
-    
-            // 當滑鼠按下時，紀錄目標
-            mapModal.addEventListener('mousedown', (e) => {
-                mousedownTarget = e.target;
-            });
-    
-            // 當滑鼠放開時，只有在按下與放開都是「遮罩本身」時才關閉
+            mapModal.addEventListener('mousedown', (e) => { mousedownTarget = e.target; });
             mapModal.addEventListener('mouseup', (e) => {
-                if (mousedownTarget === mapModal && e.target === mapModal) {
-                    closeMap();
-                }
+                if (mousedownTarget === mapModal && e.target === mapModal) closeMap();
                 mousedownTarget = null;
             });
-    
-            // 阻止地圖容器內的動作向上傳遞給遮罩
-            mapContainer.addEventListener('mousedown', (e) => {
-                e.stopPropagation();
-            });
-            mapContainer.addEventListener('mouseup', (e) => {
-                e.stopPropagation();
-            });
-            // ---------------------------
+            mapContainer.addEventListener('mousedown', (e) => e.stopPropagation());
+            mapContainer.addEventListener('mouseup', (e) => e.stopPropagation());
         });
     })();
     
