@@ -688,10 +688,10 @@ async function refreshOccupancy() {
 
         // 1. 初始化 Panzoom 縮放功能
         const panzoom = Panzoom(panElement, {
-            maxScale: 5,   // 最大放大 5 倍
-            minScale: 1,   // 最小維持 1 倍
+            maxScale: 6,   // 最大放大 5 倍
+            minScale: 0.5,   // 最小維持 1 倍
             contain: 'outside', // 拖移時會自動限制在邊界，不會飄走
-            step: 0.3      // 縮放速度
+            step: 0.8      // 縮放速度
         });
 
         // 2. 啟用滑鼠滾輪縮放 (電腦版也能用)
