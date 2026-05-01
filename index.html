@@ -174,23 +174,25 @@
         }
         
         #mapContainer {
-            touch-action: none;
-            background-color: #f8f9fa;
-            cursor: grab;
+            overflow: hidden;
+            background: #f0f0f0;
+            touch-action: none; /* 必須保留，否則手機無法縮放 */
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
         
         #panzoomElement {
-            /* 強制瀏覽器使用 GPU 渲染，這能極大提升縮放流暢度 */
-            will-change: transform;
-            transform-origin: 0 0;
+            width: 100%;
+            cursor: grab;
         }
         
         #targetSvg {
-            /* 這裡不要設定 width: 100%，要讓它維持在 4000px 的高解析度狀態 */
-            max-width: none !important; 
+            /* 這是最重要的：寬度設為 100%，高度自動 */
+            width: 100%;
             height: auto;
-            /* 提升渲染品質 */
-            image-rendering: -webkit-optimize-contrast;
+            display: block;
+            /* 移除所有 image-rendering 屬性，讓瀏覽器預設處理向量 */
         }
     </style>
 </head>
@@ -258,7 +260,7 @@
         </div>
         <div id="mapContainer" class="modal-body" style="overflow: hidden; background: #eee; touch-action: none; position: relative;">
             <div id="panzoomElement" style="display: inline-block; width: 100%; transform-origin: 0 0;">
-                <img id="targetSvg" src="B1-20260501.svg" alt="Map" style="width: 4000; height: auto; display: block;">
+                <img id="targetSvg" src="B1-20260501.svg" alt="B1演職人員停車場平面圖">
             </div>
         </div>
     </div>
@@ -707,21 +709,20 @@ async function refreshOccupancy() {
             const closeMapBtn = document.getElementById('closeMapModal');
             const panElement = document.getElementById('panzoomElement');
             const mapContainer = document.getElementById('mapContainer');
-            const img = document.getElementById('targetSvg');
     
             if (!openMapBtn || !mapModal || !panElement || typeof Panzoom === 'undefined') return;
     
-            // 1. 初始化 Panzoom
+            // 1. 初始化 Panzoom (回歸最穩定參數)
             const pz = Panzoom(panElement, {
-                maxScale: 5,        // 因為基準圖已經是 4000px，縮放倍率不需設太大
-                minScale: 0.05,     // 允許縮得很小以適配螢幕
-                step: 0.4,          // 增加步長，讓縮放感更明顯
-                animate: true,      // 開啟動畫讓手感變順滑
-                duration: 250,
-                contain: null
+                maxScale: 10,
+                minScale: 0.5,
+                step: 0.15,
+                animate: true,
+                duration: 200,
+                contain: 'outside' // 改回 outside，這樣縮放時手感會比較紮實
             });
     
-            // 2. 電腦版滾輪縮放
+            // 2. 滾輪縮放
             mapContainer.addEventListener('wheel', pz.zoomWithWheel);
     
             const openMap = (e) => {
@@ -729,31 +730,10 @@ async function refreshOccupancy() {
                 mapModal.style.display = 'block';
                 document.body.style.overflow = 'hidden';
                 
-                // 3. 計算初始縮放比 (讓 4000px 的大圖縮小到剛好填滿視窗寬度)
+                // 3. 簡單重設：讓 CSS 的 width: 100% 發揮作用
                 setTimeout(() => {
-                    const containerWidth = mapContainer.clientWidth;
-                    const containerHeight = mapContainer.clientHeight;
-                    
-                    // 使用我們設定的 4000px 作為基準
-                    const baseWidth = 4000;
-                    // 這裡需要稍微等待圖片的高比例，如果抓不到則假設一個比例
-                    const baseHeight = img.offsetHeight || (baseWidth * 0.6); 
-    
-                    // 計算初始比例
-                    const scaleW = containerWidth / baseWidth;
-                    const scaleH = containerHeight / baseHeight;
-                    const initialScale = Math.min(scaleW, scaleH) * 0.95;
-    
-                    pz.zoom(initialScale, { animate: false });
-                    
-                    // 置中地圖
-                    setTimeout(() => {
-                        const currentScale = pz.getScale();
-                        const x = (containerWidth - baseWidth * currentScale) / 2;
-                        const y = (containerHeight - baseHeight * currentScale) / 2;
-                        pz.pan(x, y, { animate: false });
-                    }, 10);
-                }, 100);
+                    pz.reset({ animate: false });
+                }, 50);
             };
     
             const closeMap = () => {
@@ -763,7 +743,10 @@ async function refreshOccupancy() {
     
             openMapBtn.addEventListener('click', openMap);
             if (closeMapBtn) closeMapBtn.addEventListener('click', closeMap);
-            mapModal.addEventListener('click', (e) => { if (e.target === mapModal) closeMap(); });
+    
+            mapModal.addEventListener('click', (e) => {
+                if (e.target === mapModal) closeMap();
+            });
         });
     })();
     
