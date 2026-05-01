@@ -166,6 +166,12 @@
                 height: 90vh;
             }
         }
+        
+        /* 針對 SVG/像素地圖優化，確保圖片在縮小時不會模糊 */
+        #panzoomElement img, #panzoomElement svg {
+            image-rendering: -webkit-optimize-contrast;
+            will-change: transform; /* 提醒瀏覽器準備使用 GPU 加速 */
+        }
     </style>
 </head>
 <body>
@@ -688,10 +694,14 @@ async function refreshOccupancy() {
 
         // 1. 初始化 Panzoom 縮放功能
         const panzoom = Panzoom(panElement, {
-            maxScale: 6,   // 最大放大 5 倍
+            maxScale: 8,   // 最大放大 5 倍
             minScale: 0.5,   // 最小維持 1 倍
-            contain: 'outside', // 拖移時會自動限制在邊界，不會飄走
-            step: 0.8      // 縮放速度
+            contain: 'inside', // 拖移時會自動限制在邊界，不會飄走
+            step: 0.1      // 縮放速度
+            canvas: true,       // 改善行動端點擊與拖移的靈敏度
+            animate: true,      // 讓縮放過程有過渡動畫，視覺上更流暢
+            duration: 200,      // 動畫持續時間 (毫秒)
+            easing: "ease-out"  // 動畫曲線
         });
 
         // 2. 啟用滑鼠滾輪縮放 (電腦版也能用)
@@ -705,10 +715,23 @@ async function refreshOccupancy() {
             
             // 打開後重設縮放位置，確保地圖置中
             setTimeout(() => {
-                panzoom.reset();
-            }, 10);
+                // 自動計算一個「適合全覽」的縮放比例
+                const containerWidth = document.getElementById('mapContainer').clientWidth;
+                const imgWidth = panElement.querySelector('img').naturalWidth || 800; // 取得原圖寬度
+                
+                // 如果是橫式圖，我們讓它初始時剛好符合寬度
+                const initialScale = containerWidth / imgWidth;
+                
+                panzoom.zoom(initialScale, { animate: false });
+                panzoom.pan(0, 0, { animate: false }); 
+            }, 50);
         });
-
+    
+        // 滑鼠滾輪縮放 (加上 animate 效果)
+        panElement.parentElement.addEventListener('wheel', (e) => {
+            panzoom.zoomWithWheel(e, { animate: true });
+        });
+    
         // 4. 關閉地圖彈窗
         function closeMap() {
             mapModal.style.display = 'none';
