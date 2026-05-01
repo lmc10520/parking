@@ -230,7 +230,7 @@
 </div>
 
 <!-- B1演職人員停車場平面圖彈出式視窗結構 -->
-<div id="mapModalOverlay" class="modal-overlay">
+<div id="mapModalOverlay" class="modal-overlay" style="display:none;">
     <div class="modal-content">
         <div class="modal-header">
             <span>B1演職人員停車場平面圖</span>
@@ -238,7 +238,7 @@
         </div>
         <div class="modal-body" id="mapContainer" style="overflow: hidden; cursor: grab;">
             <div id="panzoomElement">
-                <img src="B1-20260501.svg" alt="B1演職人員停車場平面圖" style="width: 100%; height: auto;">
+                <img src="B1-20260501.svg" alt="B1演職人員停車場平面圖" style="width: 100%; height: auto;" display: block;">
             </div>
         </div>
     </div>
@@ -637,10 +637,10 @@ async function refreshOccupancy() {
         console.log(`"name": "請填號碼", "coords": [${e.latlng.lng}, ${e.latlng.lat}]`);
     });
 
-    // 新增彈出式視窗
-    // 使用匿名函式包起來，避免污染全域變數，並確保 DOM 載入後執行
+    /** 
+     * 功能 A: [停車場現況彈窗] 
+     */
     (function() {
-        // 確保頁面載入完成
         window.addEventListener('load', function() {
             const modal = document.getElementById('modalOverlay');
             const openBtn = document.getElementById('openInstant');
@@ -648,105 +648,94 @@ async function refreshOccupancy() {
             const refreshBtn = document.getElementById('refreshModal');
             const iframe = document.getElementById('instantIframe');
     
-            // 安全檢查：如果找不到按鈕，就不執行後續動作，防止程式碼當掉
-            if (!openBtn || !modal || !iframe) return;
+            if (!openBtn || !modal) return;
     
-            // 打開彈窗
-            openBtn.addEventListener('click', function(e) {
+            const openModal = (e) => {
                 e.preventDefault();
-                // 重新載入 iframe，並加上時間標記防止快取
                 iframe.src = "instant.html?t=" + new Date().getTime();
                 modal.style.display = 'block';
-                document.body.style.overflow = 'hidden'; // 防止底層捲動
-            });
+                document.body.style.overflow = 'hidden';
+            };
     
-            // 關閉彈窗
-            function closeModal() {
+            const closeModal = () => {
                 modal.style.display = 'none';
                 document.body.style.overflow = 'auto';
-                iframe.src = ""; // 關閉時清空，節省資源
-            }
+                iframe.src = "";
+            };
     
+            openBtn.addEventListener('click', openModal);
             if (closeBtn) closeBtn.addEventListener('click', closeModal);
-    
-            // 點擊背景關閉
-            window.addEventListener('click', function(e) {
-                if (e.target === modal) {
-                    closeModal();
-                }
+            if (refreshBtn) refreshBtn.addEventListener('click', () => {
+                iframe.src = "instant.html?t=" + new Date().getTime();
             });
     
-            // 重新整理按鈕
-            if (refreshBtn) {
-                refreshBtn.addEventListener('click', function() {
-                    iframe.src = "instant.html?t=" + new Date().getTime();
-                });
-            }
+            // 點擊背景關閉
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) closeModal();
+            });
         });
     })();
-
-    // 新增B1停車場透過彈出式視窗顯示靜態平面圖
-    document.addEventListener('DOMContentLoaded', function() {
-        const mapModal = document.getElementById('mapModalOverlay');
-        const openMapBtn = document.getElementById('openMap');
-        const closeMapBtn = document.getElementById('closeMapModal');
-        const panElement = document.getElementById('panzoomElement');
-
-        // 1. 初始化 Panzoom 縮放功能
-        const panzoom = Panzoom(panElement, {
-            maxScale: 8,   // 最大放大 5 倍
-            minScale: 0.5,   // 最小維持 1 倍
-            contain: 'inside', // 拖移時會自動限制在邊界，不會飄走
-            step: 0.1      // 縮放速度
-            canvas: true,       // 改善行動端點擊與拖移的靈敏度
-            animate: true,      // 讓縮放過程有過渡動畫，視覺上更流暢
-            duration: 200,      // 動畫持續時間 (毫秒)
-            easing: "ease-out"  // 動畫曲線
-        });
-
-        // 2. 啟用滑鼠滾輪縮放 (電腦版也能用)
-        panElement.parentElement.addEventListener('wheel', panzoom.zoomWithWheel);
-
-        // 3. 打開地圖彈窗
-        openMapBtn.addEventListener('click', function(e) {
-            e.preventDefault();
-            mapModal.style.display = 'block';
-            document.body.style.overflow = 'hidden';
-            
-            // 打開後重設縮放位置，確保地圖置中
-            setTimeout(() => {
-                // 自動計算一個「適合全覽」的縮放比例
-                const containerWidth = document.getElementById('mapContainer').clientWidth;
-                const imgWidth = panElement.querySelector('img').naturalWidth || 800; // 取得原圖寬度
-                
-                // 如果是橫式圖，我們讓它初始時剛好符合寬度
-                const initialScale = containerWidth / imgWidth;
-                
-                panzoom.zoom(initialScale, { animate: false });
-                panzoom.pan(0, 0, { animate: false }); 
-            }, 50);
-        });
     
-        // 滑鼠滾輪縮放 (加上 animate 效果)
-        panElement.parentElement.addEventListener('wheel', (e) => {
-            panzoom.zoomWithWheel(e, { animate: true });
-        });
     
-        // 4. 關閉地圖彈窗
-        function closeMap() {
-            mapModal.style.display = 'none';
-            document.body.style.overflow = 'auto';
-        }
-
-        closeMapBtn.addEventListener('click', closeMap);
-        
-        // 點擊背景也能關閉
-        window.addEventListener('click', function(e) {
-            if (e.target === mapModal) {
-                closeMap();
-            }
+    /** 
+     * 功能 B: [B1平面圖 Panzoom 縮放彈窗] 
+     */
+    (function() {
+        window.addEventListener('load', function() {
+            const mapModal = document.getElementById('mapModalOverlay');
+            const openMapBtn = document.getElementById('openMap');
+            const closeMapBtn = document.getElementById('closeMapModal');
+            const panElement = document.getElementById('panzoomElement');
+            const mapContainer = document.getElementById('mapContainer');
+    
+            if (!openMapBtn || !mapModal || !panElement || typeof Panzoom === 'undefined') return;
+    
+            // 1. 初始化 Panzoom
+            const pz = Panzoom(panElement, {
+                maxScale: 8,
+                minScale: 0.5,
+                contain: 'inside',
+                step: 0.15, // 調整步長
+                canvas: true,
+                animate: true,
+                duration: 200,
+                easing: "ease-out"
+            });
+    
+            // 2. 啟用滾輪縮放
+            mapContainer.addEventListener('wheel', pz.zoomWithWheel);
+    
+            const openMap = (e) => {
+                e.preventDefault();
+                mapModal.style.display = 'block';
+                document.body.style.overflow = 'hidden';
+                
+                // 自動適應寬度
+                setTimeout(() => {
+                    const containerWidth = mapContainer.clientWidth;
+                    const img = panElement.querySelector('img');
+                    const imgWidth = img.naturalWidth || img.clientWidth || 800;
+                    const initialScale = containerWidth / imgWidth;
+                    
+                    pz.zoom(initialScale, { animate: false });
+                    pz.pan(0, 0, { animate: false });
+                }, 100);
+            };
+    
+            const closeMap = () => {
+                mapModal.style.display = 'none';
+                document.body.style.overflow = 'auto';
+            };
+    
+            openMapBtn.addEventListener('click', openMap);
+            if (closeMapBtn) closeMapBtn.addEventListener('click', closeMap);
+    
+            // 點擊背景關閉
+            mapModal.addEventListener('click', (e) => {
+                if (e.target === mapModal) closeMap();
+            });
         });
-    });
+    })();
     
 </script>
 </body>
