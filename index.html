@@ -168,32 +168,32 @@
         }
         
         /* 針對 SVG/像素地圖優化，確保圖片在縮小時不會模糊 */
+        #panzoomElement {
+            display: inline-block;
+            transform-origin: 0 0;
+        }
+        #targetSvg {
+            display: block;
+            width: 100vw;
+            height: auto;
+            pointer-events: none;
+            image-rendering: auto; 
+            filter: drop-shadow(0 0 10px rgba(0,0,0,0.1));
+        }
         #mapContainer {
+            overflow: hidden;
+            background: #f0f0f0;
             touch-action: none;
             cursor: grab;
-        }
-        
-        #mapContainer:active {
-            cursor: grabbing;
-        }
-        
-        #panzoomElement {
-            /* 確保感應層與容器一樣大 */
-            width: 100%;
-            height: 100%;
             display: flex;
             align-items: center;
             justify-content: center;
-            will-change: transform;
-            transform-style: preserve-3d;
+            width: 100%;
+            height: 100%;
         }
-        
-        #targetSvg {
-            pointer-events: none; 
-            max-width: none;
-            filter: drop-shadow(0 0 10px rgba(0,0,0,0.1));
+        #mapContainer:active {
+            cursor: grabbing;
         }
-        
         .modal-overlay {
             cursor: default;
         }
@@ -712,7 +712,7 @@ async function refreshOccupancy() {
             const closeMapBtn = document.getElementById('closeMapModal');
             const panElement = document.getElementById('panzoomElement');
             const mapContainer = document.getElementById('mapContainer');
-            const img = document.getElementById('targetSvg');
+            const img = document.getElementById('targetSvg'); // 取得圖片元素
     
             if (!openMapBtn || !mapModal || !panElement || typeof Panzoom === 'undefined') return;
     
@@ -731,19 +731,24 @@ async function refreshOccupancy() {
     
             const openMap = (e) => {
                 e.preventDefault();
+                
+                // 1. 先打開視窗 (讓瀏覽器知道容器大小)
                 mapModal.style.display = 'block';
                 document.body.style.overflow = 'hidden';
                 
-                // 延遲載入圖片以確保解析度
-                if (img.src === "" || !img.src.includes("B1-20260501.svg")) {
+                // 2. 指派 src (強制重新載入向量資料)
+                if (img.src === "" || img.src !== window.location.origin + "/B1-20260501.svg") {
                     img.src = "B1-20260501.svg";
                 }
     
+                // 3. 等待圖片載入完成後再計算縮放
                 img.onload = () => {
                     setTimeout(() => {
-                        // 因為 panElement 本身就是 100% 寬高，初始狀態不需大幅縮放
-                        // 如果是手機直式螢幕，pz.reset() 就會以 CSS 寬度 100% 呈現，非常漂亮
-                        pz.reset({ animate: false });
+                        const containerWidth = mapContainer.clientWidth;
+                        const imgWidth = img.offsetWidth;
+                        const fillWidthScale = containerWidth / imgWidth;
+                        
+                        pz.zoom(fillWidthScale, { animate: false });
                         pz.pan(0, 0, { animate: false });
                     }, 50);
                 };
@@ -752,21 +757,20 @@ async function refreshOccupancy() {
             const closeMap = () => {
                 mapModal.style.display = 'none';
                 document.body.style.overflow = 'auto';
+                // 可選：關閉時清空 src，確保下次開啟又是全新的渲染
+                // img.src = ""; 
             };
     
             openMapBtn.addEventListener('click', openMap);
             if (closeMapBtn) closeMapBtn.addEventListener('click', closeMap);
     
-            // --- 防誤觸關閉邏輯 (與新需求完全相容) ---
+            // 防誤觸邏輯 (保持原本的 mousedown/mouseup 判定)
             let mousedownTarget = null;
             mapModal.addEventListener('mousedown', (e) => { mousedownTarget = e.target; });
             mapModal.addEventListener('mouseup', (e) => {
-                // 只有當使用者點擊到「白色視窗外」的黑色遮罩時，才會觸發關閉
                 if (mousedownTarget === mapModal && e.target === mapModal) closeMap();
                 mousedownTarget = null;
             });
-            
-            // 阻止地圖內的任何操作（點擊、拖動）傳遞到外層導致誤關閉
             mapContainer.addEventListener('mousedown', (e) => e.stopPropagation());
             mapContainer.addEventListener('mouseup', (e) => e.stopPropagation());
         });
