@@ -192,6 +192,16 @@
         .modal-overlay {
             cursor: no-drop;
         }
+        /* 彈窗內容的基本過渡效果 */
+        .modal-content {
+            transition: width 0.3s ease, height 0.3s ease;
+        }
+        /* 放大後的樣式：直接撐滿螢幕 */
+        .modal-content.is-maximized {
+            width: 98% !important;
+            height: 96vh !important;
+            max-width: none !important;
+        }
     </style>
 </head>
 <body>
@@ -240,7 +250,7 @@
             <span>停車場現況</span>
             <div style="display: flex; align-items: center;">
                 <button id="refreshModal" title="重新整理" style="background:none; border:none; cursor:pointer; font-size:20px; margin-right:15px;">↻</button>
-                <button id="closeModal" style="background:none; border:none; font-size:24px; cursor:pointer;">&times;</button>
+                <button id="closeModal" title="關閉" style="background:none; border:none; font-size:24px; cursor:pointer;">&times;</button>
             </div>
         </div>
         <div class="modal-body" style="flex:1;">
@@ -254,7 +264,10 @@
     <div class="modal-content">
         <div class="modal-header">
             <span>B1演職人員停車場平面圖</span>
-            <button id="closeMapModal" style="background:none; border:none; font-size:24px; cursor:pointer;">&times;</button>
+            <div style="display: flex; align-items: center;">
+                <button id="maximizeMap" title="切換大小" style="background:none; border:none; cursor:pointer; font-size:20px; margin-right:15px;">⛶</button>
+                <button id="closeMapModal" title="關閉" style="background:none; border:none; font-size:24px; cursor:pointer;">&times;</button>
+            </div>
         </div>
         <div id="mapContainer" class="modal-body" style="background: #f0f0f0; overflow: hidden; position: relative;">
             <div id="panzoomElement" style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center;">
@@ -708,6 +721,22 @@ async function refreshOccupancy() {
             const panElement = document.getElementById('panzoomElement');
             const mapContainer = document.getElementById('mapContainer');
             const img = document.getElementById('targetSvg'); // 取得圖片元素
+            const mapContent = document.getElementById('mapModalContent');
+            const maxMapBtn = document.getElementById('maximizeMap');
+
+            if (maxMapBtn && mapContent) {
+                        maxMapBtn.addEventListener('click', function() {
+                            // 1. 切換放大類別
+                            mapContent.classList.toggle('is-maximized');
+                            
+                            // 2. 核心：等視窗變大後，讓 Panzoom 重新適應新寬度
+                            setTimeout(() => {
+                                // 呼叫 reset() 是最穩定的做法，它會讓 100% 寬度的圖片自動填滿新視窗
+                                pz.reset({ animate: true });
+                                pz.pan(0, 0, { animate: true });
+                            }, 310); // 略長於 CSS 的 0.3s
+                        });
+                    }
     
             if (!openMapBtn || !mapModal || !panElement || typeof Panzoom === 'undefined') return;
     
