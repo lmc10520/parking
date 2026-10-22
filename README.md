@@ -1,4 +1,4 @@
-*** 所有程式碼透過 Google AI Studio Gemini 3 生成 ***
+*** 初版程式碼透過 Google AI Studio Gemini 3 生成 ***
 
 **Web App 前端與使用者介面 (UI/UX)**
  - HTML5 & CSS3
