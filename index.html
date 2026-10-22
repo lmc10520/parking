@@ -4,28 +4,27 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <meta name="theme-color" content="#f0f0f0">
-    <meta name="description" content="提供B2停車場車格號碼、柱號的檢索與路線導引">
+    <meta name="description" content="提供B2觀眾停車場、B1演職人員停車場車格號碼、柱號的檢索與路線導引">
     <title>B2停車場導航</title>
-    
+
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <script src="https://unpkg.com/@panzoom/panzoom@4.5.1/dist/panzoom.min.js"></script>
     <link rel="manifest" href="manifest.json">
     <link rel="icon" href="icon.png" type="image/png">
     <link rel="apple-touch-icon" href="icon.png">
 
     <style>
         body { margin: 0; padding: 0; background: #eee; overflow: hidden; }
-        
-        #map { 
-            height: 100vh; width: 100vw; 
+
+        #map {
+            height: 100vh; width: 100vw;
             background-color: #f0f0f0;
-            transition: transform 0.25s ease-out, scale 0.3s ease-in-out; 
+            transition: transform 0.25s ease-out, scale 0.3s ease-in-out;
             transform-origin: center center;
         }
 
         #map.compass-mode { scale: 2.2; }
-        
+
         .search-container {
             position: absolute; top: 12px; left: 12px; z-index: 1000;
             background: rgba(255, 255, 255, 0.95); padding: 10px; border-radius: 12px;
@@ -37,17 +36,39 @@
             background: #fff5f5; padding: 6px; border-radius: 8px;
             border: 1px solid #fab1a0; font-weight: bold; color: #d63031;
         }
+        #routeStatus .route-hint { display: block; font-size: 12px; font-weight: normal; color: #636e72; margin-top: 4px; }
+        #routeStatus .route-next {
+            display: block; width: 100%; margin-top: 6px; padding: 7px; border: none; border-radius: 6px;
+            background: #d63031; color: #fff; font-weight: bold; font-size: 14px; cursor: pointer;
+        }
+
+        /* 輸入框：左側樓層鍵 + 右側輸入內容 */
+        .input-row {
+            display: flex; height: 42px; margin-bottom: 8px;
+            border: 2px solid #ccc; border-radius: 8px; background: #fff;
+            box-sizing: border-box; overflow: hidden;
+        }
+        #floorBadge {
+            flex: 0 0 52px; border: none; border-right: 2px solid #ccc;
+            font-size: 17px; font-weight: bold; color: #fff; cursor: pointer;
+            background: #2f3542; display: flex; align-items: center; justify-content: center; gap: 4px;
+        }
+        #floorBadge::after {
+            content: ""; border-left: 4px solid transparent; border-right: 4px solid transparent;
+            border-top: 5px solid rgba(255,255,255,0.75);
+        }
+        #floorBadge.is-b1 { background: #6c5ce7; }
+        #floorBadge:active { filter: brightness(0.85); }
         #combinedInput {
-            width: 100%; height: 42px; font-size: 18px; text-align: center;
-            border: 2px solid #ccc; border-radius: 8px;
-            background: #fff; box-sizing: border-box; cursor: pointer; margin-bottom: 8px;
+            flex: 1; min-width: 0; height: 100%; font-size: 18px; text-align: center;
+            border: none; outline: none; background: transparent; cursor: pointer;
         }
         .keypad { display: none; flex-direction: row; gap: 8px; }
         .keypad.active { display: flex; }
         .keypad-letters { display: flex; flex-direction: column; gap: 5px; flex: 0.8; }
         .keypad-main { display: flex; flex-direction: column; gap: 5px; flex: 3.5; }
         .key-row { display: flex; justify-content: space-between; gap: 5px; }
-        
+
         .key-btn {
             flex: 1; height: 44px; font-size: 16px; font-weight: bold;
             cursor: pointer; border: 1px solid #bbb; border-radius: 6px;
@@ -63,10 +84,10 @@
 
         .key-btn.func-clear { background: #fff5f5; color: #e03131; border-color: #ffa8a8; }
         .key-btn.func-search { background: #f4fce3; color: #2f9e44; border-color: #c0eb75; }
-        
-        .key-btn.nav-point { 
-            background-color: #f1f2f6; 
-            font-size: 13px; 
+
+        .key-btn.nav-point {
+            background-color: #f1f2f6;
+            font-size: 13px;
             border: 2px solid #ddd;
         }
 
@@ -85,7 +106,25 @@
         }
         #compassBtn.active { background: #ff4757; color: white; border-color: #d63031; }
         #occupancyBtn.active { background: #2f3542; border-color: #000; color: white; }
-        
+
+        /* 樓層切換（B1 在上、B2 在下，對應實際樓層位置） */
+        .floor-switch {
+            position: absolute; right: 12px; bottom: 36px; z-index: 1000;
+            display: flex; flex-direction: column; overflow: hidden;
+            background: #fff; border: 2px solid #ccc; border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2); font-family: sans-serif;
+        }
+        .floor-switch button {
+            width: 64px; padding: 8px 0 6px; border: none; background: #fff; cursor: pointer;
+            font-size: 18px; font-weight: bold; color: #2f3542; line-height: 1.1;
+        }
+        .floor-switch button + button { border-top: 1px solid #ddd; }
+        .floor-switch button small { display: block; font-size: 10px; font-weight: normal; color: #888; margin-top: 2px; }
+        .floor-switch button.active { background: #2f3542; color: #fff; }
+        .floor-switch button.active small { color: #dfe4ea; }
+        .floor-switch button[data-floor="B1"].active { background: #6c5ce7; }
+        .floor-switch button.has-route::before { content: "● "; color: #ff4757; font-size: 11px; vertical-align: middle; }
+
         .popup-nav-container { text-align: center; padding: 5px; }
         .popup-btn {
             display: block; width: 100%; margin-top: 8px; padding: 10px;
@@ -106,8 +145,9 @@
             background: rgba(0, 0, 0, 0.6); /* 半透明黑 */
             z-index: 9999; /* 確保在最上層 */
             backdrop-filter: blur(4px); /* 背景模糊，增加質感 */
+            cursor: no-drop;
         }
-        
+
         /* 彈出式視窗主體 */
         .modal-content {
             position: absolute;
@@ -123,8 +163,9 @@
             display: flex;
             flex-direction: column;
             box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            cursor: auto;
         }
-        
+
         /* 彈出式視窗標題列 */
         .modal-header {
             padding: 15px 20px;
@@ -135,25 +176,25 @@
             border-bottom: 1px solid #ddd;
             font-weight: bold;
         }
-        
+
         #closeModal {
             background: none;
             border: none;
             font-size: 24px;
             cursor: pointer;
         }
-        
+
         /* 內嵌網頁區域 */
         .modal-body {
             flex: 1;
         }
-        
+
         .modal-body iframe {
             width: 100%;
             height: 100%;
             display: block;
         }
-        
+
         /* 手機版適應 */
         @media (max-width: 600px) {
             .modal-content {
@@ -161,57 +202,28 @@
                 height: 90vh;
             }
         }
-        
-        /* 針對 B1 SVG/像素地圖優化，確保圖片在縮小時不會模糊 */
-        #panzoomElement {
-            display: inline-block;
-            transform-origin: 0 0;
-        }
-        #targetSvg {
-            display: block;
-            width: 100vw;
-            height: auto;
-            pointer-events: none;
-            image-rendering: auto; 
-        }
-        #mapContainer {
-            overflow: hidden;
-            background: #f0f0f0;
-            touch-action: none;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            width: 100%;
-            height: 100%;
-        }
-        .modal-overlay {
-            cursor: no-drop;
-        }
-        /* 彈窗內容的基本過渡效果 */
-        .modal-content {
-            transition: width 0.3s ease, height 0.3s ease;
-        }
-        /* 放大後的樣式：直接撐滿螢幕 */
-        .modal-content.is-maximized {
-            width: 98% !important;
-            height: 96vh !important;
-            max-width: none !important;
-        }
     </style>
 </head>
 <body>
 
 <div class="floating-btns">
     <div id="compassBtn" class="side-btn" onclick="toggleCompass()" title="啟動陀螺儀">🧭</div>
-    <a href="javascript:void(0)" id="openMap" class="side-btn" title="B1演職人員停車場">🗺️</a>
     <a href="javascript:void(0)" id="openInstant" class="side-btn" title="停泊即時資訊">🔗</a>
-    <div id="occupancyBtn" class="side-btn" onclick="toggleOccupancy()" title="顯示即時車位">🚥</div>    
+    <div id="occupancyBtn" class="side-btn" onclick="toggleOccupancy()" title="顯示即時車位">🚥</div>
+</div>
+
+<div id="floorSwitch" class="floor-switch">
+    <button data-floor="B1" onclick="showFloor('B1')" title="B1演職人員停車場">B1<small>演職人員</small></button>
+    <button data-floor="B2" class="active" onclick="showFloor('B2')" title="B2觀眾停車場">B2<small>觀眾</small></button>
 </div>
 
 <div class="search-container">
     <div id="routeStatus"></div>
-    <input type="text" id="combinedInput" placeholder="點擊搜尋/導航" readonly onclick="toggleKeypad()">
-    
+    <div class="input-row">
+        <button id="floorBadge" onclick="toggleInputFloor(event)" title="切換樓層">B2</button>
+        <input type="text" id="combinedInput" placeholder="點擊搜尋/導航" readonly onclick="toggleKeypad()">
+    </div>
+
     <div id="keypadSection" class="keypad">
         <div class="keypad-letters">
             <button class="key-btn btn-a" onclick="appendKey('A')">A</button>
@@ -220,7 +232,7 @@
             <button class="key-btn btn-d" onclick="appendKey('D')">D</button>
             <button class="key-btn btn-e" onclick="appendKey('E')">E</button>
         </div>
-        
+
         <div class="keypad-main">
             <div class="key-row"><button class="key-btn" onclick="appendKey('1')">1</button><button class="key-btn" onclick="appendKey('2')">2</button><button class="key-btn" onclick="appendKey('3')">3</button></div>
             <div class="key-row"><button class="key-btn" onclick="appendKey('4')">4</button><button class="key-btn" onclick="appendKey('5')">5</button><button class="key-btn" onclick="appendKey('6')">6</button></div>
@@ -254,24 +266,6 @@
     </div>
 </div>
 
-<!-- B1演職人員停車場平面圖彈出式視窗結構 -->
-<div id="mapModalOverlay" class="modal-overlay" style="display:none;">
-    <div id="mapModalContent" class="modal-content">
-        <div class="modal-header">
-            <span>B1演職人員停車場平面圖</span>
-            <div style="display: flex; align-items: center;">
-                <button id="maximizeMap" title="切換大小" style="background:none; border:none; cursor:pointer; font-size:16px; margin-right:15px;">⛶</button>
-                <button id="closeMapModal" title="關閉" style="background:none; border:none; font-size:24px; cursor:pointer;">&times;</button>
-            </div>
-        </div>
-        <div id="mapContainer" class="modal-body" style="background: #f0f0f0; overflow: hidden; position: relative;">
-            <div id="panzoomElement" style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center;">
-                <img id="targetSvg" src="" alt="B1演職人員停車場平面圖">
-            </div>
-        </div>
-    </div>
-</div>
-    
 <div id="map"></div>
 
 <script>
@@ -281,7 +275,7 @@
 
     const imageBounds = [[22.62193, 120.34105], [22.62406, 120.34360]];
     const API_URL = "https://analytics.sto-tek.com/_nodered/api/callExternalAPI?apiKey=495370807e744c8685b05ed5aabc3712&EAPI=API_Building_02&buildingID=kaohsiung_weiwuying&s=&m=lpr&p=0";
-    
+
     const roadNetwork = {
         "nodes": {
             "A1": [120.34124, 22.62270], "A3": [120.34137, 22.62307], "A4": [120.34149, 22.62344], "A5": [120.34164, 22.62391],
@@ -297,46 +291,113 @@
         ]
     };
 
+    // --- 樓層設定：B2 觀眾停車場為主、B1 演職人員停車場為輔 ---
+    // B1 路網由 tools/build_b1.py 產生，存放於 parking-b1.geojson 的 road_network
+    const FLOOR_CONFIG = {
+        B2: { svg: 'B2-20260503.svg', data: 'parking.geojson', label: 'B2F' },
+        B1: { svg: 'B1-20260501-geo.svg', data: 'parking-b1.geojson', label: 'B1F' }
+    };
+    // 可往返 B1、B2 的樓梯及電梯（兩層的 geojson 皆有同名區域）
+    const CONNECTORS = [
+        { name: '入口大廳風除室及梯廳', short: '入口大廳梯廳', icon: 'EV.svg' },
+        { name: '潮台菜旁通往1F榕樹廣場、戶外劇場樓梯', short: '潮台菜旁樓梯', icon: 'stair.svg' }
+    ];
+    // 場館 CI 指引標示（電梯 / 樓梯）
+    const ciImg = (c, size) => `<img src="${c.icon}" alt="${c.short}" style="width:${size}px;height:${size}px;vertical-align:-3px;border-radius:2px">`;
+    const floors = {}; // { B2: { group, geojson, network, occupied }, B1: {...} }
+    let currentFloor = 'B2';
+
     const redFlagIcon = L.divIcon({
         html: '<div style="font-size: 38px; filter: drop-shadow(2px 2px 2px rgba(0,0,0,0.3));">🚩</div>',
         className: '', iconSize: [40, 40], iconAnchor: [10, 38]
     });
+    const connectorIcon = (c) => L.divIcon({
+        html: `<div style="filter: drop-shadow(2px 2px 2px rgba(0,0,0,0.3));">${ciImg(c, 32)}</div>`,
+        className: '', iconSize: [32, 32], iconAnchor: [16, 16]
+    });
 
-    let geojsonLayer, currentInput = "", activeSpot = null;
-    let startData = null, endData = null, routeLine = null, startMarker = null, endMarker = null;
+    let currentInput = "", activeSpot = null; // activeSpot: { floor, layer }
+    let startData = null, endData = null, startMarker = null, endMarker = null;
+    let routeLegs = []; // [{ floor, line, connectorMarker }]
     let isOccupancyMode = false;
-    let occupiedSet = new Set();
 
     const map = L.map('map', { center: [22.6231, 120.3425], zoom: 19, maxZoom: 24, minZoom: 17, zoomControl: false });
     L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png?key=cb1_3lmo_1_f08edeed88f66c633461dbcb', { opacity: 0.4, maxZoom: 24, maxNativeZoom: 19 }).addTo(map);
-    L.imageOverlay('B2-20260503.svg', imageBounds, { opacity: 0.8, interactive: false }).addTo(map);
+
+    Object.keys(FLOOR_CONFIG).forEach(f => {
+        floors[f] = { group: L.layerGroup(), geojson: null, network: f === 'B2' ? roadNetwork : null, occupied: new Set() };
+        L.imageOverlay(FLOOR_CONFIG[f].svg, imageBounds, { opacity: 0.8, interactive: false }).addTo(floors[f].group);
+    });
+    floors.B2.group.addTo(map);
 
     // --- 載入數據 ---
-    fetch('parking.geojson').then(res => res.json()).then(data => {
-        geojsonLayer = L.geoJSON(data, {
+    function buildGeojsonLayer(floor, data) {
+        return L.geoJSON(data, {
             pointToLayer: (f, l) => L.circleMarker(l, { radius: 3, fillColor: "#bfbfbf", color: "#bfbfbf", weight: 0.1, opacity: 0.1, fillOpacity: 0.1 }),
             style: (feature) => ({
-                color: "#bfbfbf", opacity: 0, weight: 0, fillColor: "#333", fillOpacity: 0 
+                color: "#bfbfbf", opacity: 0, weight: 0, fillColor: "#333", fillOpacity: 0
             }),
             onEachFeature: function(feature, layer) {
                 const name = feature.properties.name;
                 const roadId = feature.properties.road_id;
-                
+                const title = `<span style="color:#888">${FLOOR_CONFIG[floor].label}</span> <b>${name}</b>`;
+
                 if (roadId) {
                     const popupContent = `
                         <div class="popup-nav-container">
-                            <b>${name}</b>
-                            <button class="popup-btn from" onclick="setPointViaMap('${name}', 'from')">設為起點</button>
-                            <button class="popup-btn to" onclick="setPointViaMap('${name}', 'to')">設為終點</button>
+                            ${title}
+                            <button class="popup-btn from" onclick="setPointViaMap('${floor}', '${name}', 'from')">設為起點</button>
+                            <button class="popup-btn to" onclick="setPointViaMap('${floor}', '${name}', 'to')">設為終點</button>
                         </div>
                     `;
                     layer.bindPopup(popupContent);
                 } else {
-                    layer.bindPopup(`<b>${name}</b>`);
+                    layer.bindPopup(title);
                 }
             }
-        }).addTo(map);
+        });
+    }
+
+    const dataReady = Promise.all(Object.keys(FLOOR_CONFIG).map(f =>
+        fetch(FLOOR_CONFIG[f].data).then(res => res.json()).then(data => {
+            if (data.road_network) floors[f].network = data.road_network;
+            floors[f].geojson = buildGeojsonLayer(f, data).addTo(floors[f].group);
+        })
+    )).then(() => {
+        // 由「停泊即時資訊」獨立開啟時，以 ?guide=B1F-052 帶入指引
+        const guide = new URLSearchParams(location.search).get('guide');
+        if (guide) startGuide('', guide);
     });
+
+    // --- 樓層切換 ---
+    function showFloor(floor) {
+        if (!floors[floor]) return;
+        if (floor !== currentFloor) {
+            map.closePopup();
+            map.removeLayer(floors[currentFloor].group);
+            floors[floor].group.addTo(map);
+            currentFloor = floor;
+        }
+        const badge = document.getElementById('floorBadge');
+        badge.textContent = floor;
+        badge.classList.toggle('is-b1', floor === 'B1');
+        document.querySelectorAll('#floorSwitch button').forEach(b => {
+            b.classList.toggle('active', b.dataset.floor === floor);
+            b.classList.toggle('has-route', routeLegs.some(l => l.floor === b.dataset.floor));
+        });
+        updateRouteStatus();
+        const leg = routeLegs.find(l => l.floor === floor);
+        if (leg) {
+            // 上方預留搜尋面板高度，避免路線被遮住
+            const panel = document.querySelector('.search-container');
+            map.fitBounds(leg.line.getBounds(), { paddingTopLeft: [30, panel.offsetTop + panel.offsetHeight + 30], paddingBottomRight: [30, 50] });
+        }
+    }
+
+    function toggleInputFloor(e) {
+        e.stopPropagation();
+        showFloor(currentFloor === 'B2' ? 'B1' : 'B2');
+    }
 
     // --- 當使用者在使用中突然斷網時，自動關閉車位顯示模式，確保地圖回歸穩定狀態
     window.addEventListener('offline', () => {
@@ -351,7 +412,7 @@ let occupancyTimer = null; // 新增計時器變數
     // --- 即時車位顯示邏輯 ---
     async function toggleOccupancy() {
         const btn = document.getElementById('occupancyBtn');
-        
+
         // 1. 離線檢查
         if (!navigator.onLine) {
             alert("目前為離線狀態，無法取得即時車位資訊。\n搜尋與導航功能仍可正常使用。");
@@ -361,11 +422,11 @@ let occupancyTimer = null; // 新增計時器變數
         }
 
         isOccupancyMode = !isOccupancyMode;
-        
+
         if (isOccupancyMode) {
             btn.classList.add('active');
             await refreshOccupancy();
-            
+
             // 設定定時更新
             occupancyTimer = setInterval(async () => {
                 // 自動更新時若斷網，就靜默停止，不彈出視窗打擾使用者
@@ -375,7 +436,7 @@ let occupancyTimer = null; // 新增計時器變數
                     console.log("偵測到離線，暫停自動更新");
                 }
             }, 60000);
-            
+
         } else {
             btn.classList.remove('active');
             if (occupancyTimer) {
@@ -390,9 +451,9 @@ let occupancyTimer = null; // 新增計時器變數
 async function refreshOccupancy() {
         const btn = document.getElementById('occupancyBtn');
         const originalIcon = "🚥";
-        
+
         try {
-            btn.innerHTML = "⌛"; 
+            btn.innerHTML = "⌛";
             await fetchOccupancyData();
             applyOccupancyStyle();
             btn.innerHTML = originalIcon;
@@ -404,8 +465,21 @@ async function refreshOccupancy() {
             if (!isOccupancyMode) btn.classList.remove('active');
         }
     }
-    
-    // 這是您剛才修改過、具備「去零」邏輯的資料抓取函式
+
+    // 解析車格代碼，例如 "B1F-052"、"B2F_123"，或 Floor="B1F" + "052"
+    function parseSpotCode(floorStr, numStr) {
+        const raw = String(numStr || '').toUpperCase();
+        const fm = /B\s*([12])/.exec(raw) || /B\s*([12])/.exec(String(floorStr || '').toUpperCase());
+        const nm = /(\d+)\s*$/.exec(raw.replace(/^B\s*[12]\s*F?/, ''));
+        if (!fm || !nm) return null;
+        return { floor: 'B' + fm[1], spot: parseInt(nm[1], 10).toString() };
+    }
+
+    function isPlateEmpty(p) {
+        return !p || p === "Empty" || p === "NONE";
+    }
+
+    // 具備「去零」邏輯的資料抓取函式，B1、B2 分別記錄
     async function fetchOccupancyData() {
         try {
             // 加入 timeout 機制，避免網路太慢時轉圈圈太久 (5秒超時)
@@ -418,17 +492,14 @@ async function refreshOccupancy() {
             if (!response.ok) throw new Error("API 回應錯誤");
 
             const result = await response.json();
-            occupiedSet.clear();
-            
+            Object.values(floors).forEach(f => f.occupied.clear());
+
             const carData = result.data || result;
             if (Array.isArray(carData)) {
                 carData.forEach(item => {
-                    if (item.ParkingNumber && (item.ParkingNumber.startsWith("B2F_") || item.ParkingNumber.startsWith("B2F-"))) {
-                        const rawNumPart = item.ParkingNumber.substring(4); 
-                        const spotNum = parseInt(rawNumPart, 10).toString();
-                        if (item.LicensePlate && item.LicensePlate !== "" && item.LicensePlate !== "Empty") {
-                            occupiedSet.add(spotNum);
-                        }
+                    const code = parseSpotCode(item.Floor, item.ParkingNumber);
+                    if (code && floors[code.floor] && !isPlateEmpty(item.LicensePlate)) {
+                        floors[code.floor].occupied.add(code.spot);
                     }
                 });
             }
@@ -437,26 +508,27 @@ async function refreshOccupancy() {
         }
     }
 
+    const OCCUPIED_STYLE = { fillOpacity: 0.7, fillColor: "#2d3436", color: "#000", opacity: 0.5 };
+    const HIGHLIGHT_STYLE = { color: '#ff0000', opacity: 1, weight: 4, fillColor: '#ffff00', fillOpacity: 0.7 };
+
     function applyOccupancyStyle() {
-        if (!geojsonLayer) return;
-        geojsonLayer.eachLayer(layer => {
-            const spotName = layer.feature.properties.name.toString();
-            if (occupiedSet.has(spotName)) {
-                layer.setStyle({ fillOpacity: 0.7, fillColor: "#2d3436", color: "#000", opacity: 0.5 });
-            } else {
-                // 未占用的保持透明，但要確保原本的樣式不被洗掉
-                layer.setStyle({ fillOpacity: 0 });
-            }
+        Object.values(floors).forEach(f => {
+            if (!f.geojson) return;
+            f.geojson.eachLayer(layer => {
+                if (activeSpot && activeSpot.layer === layer) return;
+                if (f.occupied.has(layer.feature.properties.name.toString())) layer.setStyle(OCCUPIED_STYLE);
+                else f.geojson.resetStyle(layer); // 未占用的保持原本樣式
+            });
         });
     }
 
     function resetOccupancyStyle() {
-        if (!geojsonLayer) return;
-        geojsonLayer.eachLayer(layer => {
-            // 如果這格不是當前搜尋選中的格子，就重置
-            if (activeSpot !== layer) {
-                geojsonLayer.resetStyle(layer);
-            }
+        Object.values(floors).forEach(f => {
+            if (!f.geojson) return;
+            f.geojson.eachLayer(layer => {
+                // 如果這格不是當前搜尋選中的格子，就重置
+                if (!activeSpot || activeSpot.layer !== layer) f.geojson.resetStyle(layer);
+            });
         });
     }
 
@@ -464,7 +536,22 @@ async function refreshOccupancy() {
     function formatInput(val) {
         val = val.toUpperCase();
         if (val.length === 2 && /[A-E]/.test(val[0]) && /\d/.test(val[1])) return val[0] + '0' + val[1];
+        if (/^\d+$/.test(val)) return parseInt(val, 10).toString(); // 052 → 52
         return val;
+    }
+
+    function findFeature(floor, name) {
+        const f = floors[floor];
+        if (!f || !f.geojson) return null;
+        let target = null;
+        f.geojson.eachLayer(l => { if (l.feature.properties.name.toString().toUpperCase() === name) target = l; });
+        return target;
+    }
+
+    function layerPos(l) { return l.getLatLng ? l.getLatLng() : l.getBounds().getCenter(); }
+
+    function notFoundMsg(floor, name) {
+        return `${floor} 無此編號: ${name}`;
     }
 
     // --- 羅盤邏輯 ---
@@ -504,11 +591,11 @@ async function refreshOccupancy() {
 
     // --- 導航核心邏輯 ---
     function calcDist(p1, p2) { return Math.sqrt(Math.pow(p1[0]-p2[0],2) + Math.pow(p1[1]-p2[1],2)) * 100000; }
-    function dijkstra(start, end) {
+    function dijkstra(net, start, end) {
         const graph = {};
-        for (let id in roadNetwork.nodes) graph[id] = {};
-        roadNetwork.edges.forEach(([u, v]) => {
-            const d = calcDist(roadNetwork.nodes[u], roadNetwork.nodes[v]);
+        for (let id in net.nodes) graph[id] = {};
+        net.edges.forEach(([u, v]) => {
+            const d = calcDist(net.nodes[u], net.nodes[v]);
             graph[u][v] = d; graph[v][u] = d;
         });
         const dists = {}, prevs = {}, pq = new Set(Object.keys(graph));
@@ -535,41 +622,124 @@ async function refreshOccupancy() {
         return [x1 + t*dx, y1 + t*dy];
     }
 
-    function getNearestPathInfo(latlng) {
+    function getNearestPathInfo(net, latlng) {
         let minD = Infinity, best = null;
-        roadNetwork.edges.forEach(([u, v]) => {
-            const proj = getProjectionPoint(latlng, roadNetwork.nodes[u], roadNetwork.nodes[v]);
+        net.edges.forEach(([u, v]) => {
+            const proj = getProjectionPoint(latlng, net.nodes[u], net.nodes[v]);
             const d = calcDist([latlng.lng, latlng.lat], proj);
             if (d < minD) { minD = d; best = { proj, nodes: [u, v] }; }
         });
         return best;
     }
 
-    function drawRoute() {
-        if (routeLine) map.removeLayer(routeLine);
-        const sInfo = getNearestPathInfo(startData.pos), eInfo = getNearestPathInfo(endData.pos);
-        if (!sInfo || !eInfo) return;
+    // 計算單一樓層內兩點間的路徑，回傳 { latlngs, dist }
+    function routeOnFloor(floor, fromPos, toPos) {
+        const net = floors[floor].network;
+        const sInfo = getNearestPathInfo(net, fromPos), eInfo = getNearestPathInfo(net, toPos);
+        if (!sInfo || !eInfo) return null;
+        const from = [fromPos.lng, fromPos.lat], to = [toPos.lng, toPos.lat];
         let bestPath = null, minTotalDist = Infinity;
+        // 起訖點投影在同一段車道上時，直接沿車道前進
+        if (sInfo.nodes.join() === eInfo.nodes.join()) {
+            minTotalDist = calcDist(from, sInfo.proj) + calcDist(sInfo.proj, eInfo.proj) + calcDist(eInfo.proj, to);
+            bestPath = [];
+        }
         sInfo.nodes.forEach(sNode => eInfo.nodes.forEach(eNode => {
-            const path = dijkstra(sNode, eNode);
-            let total = calcDist([startData.pos.lng, startData.pos.lat], sInfo.proj) + calcDist(sInfo.proj, roadNetwork.nodes[sNode]);
-            for(let i=0; i<path.length-1; i++) total += calcDist(roadNetwork.nodes[path[i]], roadNetwork.nodes[path[i+1]]);
-            total += calcDist(roadNetwork.nodes[eNode], eInfo.proj) + calcDist(eInfo.proj, [endData.pos.lng, endData.pos.lat]);
+            const path = dijkstra(net, sNode, eNode);
+            if (path[0] !== sNode) return; // 不連通
+            let total = calcDist(from, sInfo.proj) + calcDist(sInfo.proj, net.nodes[sNode]);
+            for(let i=0; i<path.length-1; i++) total += calcDist(net.nodes[path[i]], net.nodes[path[i+1]]);
+            total += calcDist(net.nodes[eNode], eInfo.proj) + calcDist(eInfo.proj, to);
             if (total < minTotalDist) { minTotalDist = total; bestPath = path; }
         }));
-        let final = [[startData.pos.lat, startData.pos.lng], [sInfo.proj[1], sInfo.proj[0]]];
-        bestPath.forEach(id => final.push([roadNetwork.nodes[id][1], roadNetwork.nodes[id][0]]));
-        final.push([eInfo.proj[1], eInfo.proj[0]], [endData.pos.lat, endData.pos.lng]);
-        routeLine = L.polyline(final, { color: '#ff4757', weight: 8, opacity: 0.8, dashArray: '8, 12' }).addTo(map);
-        map.fitBounds(routeLine.getBounds(), { padding: [80, 80] });
-        document.getElementById('routeStatus').style.display = "block";
-        document.getElementById('routeStatus').innerHTML = `${startData.name} ➔ ${endData.name}`;
+        if (!bestPath) return null;
+        let final = [[fromPos.lat, fromPos.lng], [sInfo.proj[1], sInfo.proj[0]]];
+        bestPath.forEach(id => final.push([net.nodes[id][1], net.nodes[id][0]]));
+        final.push([eInfo.proj[1], eInfo.proj[0]], [toPos.lat, toPos.lng]);
+        return { latlngs: final, dist: minTotalDist };
+    }
+
+    // 標記屬於樓層圖層群組，必須從群組移除，否則切回該樓層會再出現
+    function removeMarker(m) {
+        if (m) Object.values(floors).forEach(f => f.group.removeLayer(m));
+    }
+
+    function clearRoute() {
+        routeLegs.forEach(l => {
+            floors[l.floor].group.removeLayer(l.line);
+            if (l.connectorMarker) floors[l.floor].group.removeLayer(l.connectorMarker);
+        });
+        routeLegs = [];
+    }
+
+    function drawRoute() {
+        clearRoute();
+        const legs = [];
+        let via = null;
+        if (startData.floor === endData.floor) {
+            const r = routeOnFloor(startData.floor, startData.pos, endData.pos);
+            if (!r) return;
+            legs.push({ floor: startData.floor, latlngs: r.latlngs });
+        } else {
+            // 跨樓層：先指引到樓梯或電梯，再由另一層的同一處前往終點，取總距離最短者
+            let best = null;
+            CONNECTORS.forEach(c => {
+                const a = findFeature(startData.floor, c.name.toUpperCase());
+                const b = findFeature(endData.floor, c.name.toUpperCase());
+                if (!a || !b) return;
+                const r1 = routeOnFloor(startData.floor, startData.pos, layerPos(a));
+                const r2 = routeOnFloor(endData.floor, layerPos(b), endData.pos);
+                if (r1 && r2 && (!best || r1.dist + r2.dist < best.dist)) best = { c, r1, r2, a, b, dist: r1.dist + r2.dist };
+            });
+            if (!best) return alert("找不到可往返樓層的樓梯或電梯");
+            via = best.c;
+            legs.push({ floor: startData.floor, latlngs: best.r1.latlngs, connector: layerPos(best.a) });
+            legs.push({ floor: endData.floor, latlngs: best.r2.latlngs, connector: layerPos(best.b) });
+        }
+        legs.forEach(l => {
+            const leg = { floor: l.floor, via };
+            leg.line = L.polyline(l.latlngs, { color: '#ff4757', weight: 8, opacity: 0.8, dashArray: '8, 12' }).addTo(floors[l.floor].group);
+            if (l.connector) leg.connectorMarker = L.marker(l.connector, { icon: connectorIcon(via), title: via.short }).bindPopup(`<b>${via.name}</b>`).addTo(floors[l.floor].group);
+            routeLegs.push(leg);
+        });
+        currentInput = ""; document.getElementById('combinedInput').value = "";
+        document.getElementById('keypadSection').classList.remove('active');
+        showFloor(startData.floor); // 先顯示起點所在樓層的第 1 段路徑
+    }
+
+    // 顯示用編號：車格補零為三碼，例如 B1F-052；柱號、區域名稱維持原樣
+    function pointLabel(p) {
+        return `${FLOOR_CONFIG[p.floor].label}-${/^\d+$/.test(p.name) ? p.name.padStart(3, '0') : p.name}`;
+    }
+
+    function updateRouteStatus() {
+        const box = document.getElementById('routeStatus');
+        if (!routeLegs.length) {
+            // 只設定了終點（例如由「指引」帶入），提示設定起點
+            if (endData && !startData) {
+                box.style.display = "block";
+                box.innerHTML = `終點 ${pointLabel(endData)}<span class="route-hint">請輸入或點選目前位置，設為起點</span>`;
+            } else {
+                box.style.display = "none";
+            }
+            return;
+        }
+        const s = pointLabel(startData), e = pointLabel(endData);
+        box.style.display = "block";
+        if (routeLegs.length === 1) { box.innerHTML = `${s} ➔ ${e}`; return; }
+        const via = routeLegs[0].via;
+        if (currentFloor === startData.floor) {
+            box.innerHTML = `${s} ➔ ${ciImg(via, 18)} ${via.short}<span class="route-hint">抵達後前往 ${endData.floor}，再至 ${e}</span>`
+                + `<button class="route-next" onclick="showFloor('${endData.floor}')">已到達，切換至 ${endData.floor} ▶</button>`;
+        } else {
+            box.innerHTML = `${ciImg(via, 18)} ${via.short} ➔ ${e}<span class="route-hint">第 2 段（${endData.floor}）</span>`
+                + `<button class="route-next" style="background:#636e72" onclick="showFloor('${startData.floor}')">◀ 回到 ${startData.floor} 第 1 段</button>`;
+        }
     }
 
     // --- 互動功能 ---
-    window.setPointViaMap = function(name, type) {
-        let targetLayer = null;
-        geojsonLayer.eachLayer(l => { if (l.feature.properties.name === name) targetLayer = l; });
+    window.setPointViaMap = function(floor, name, type) {
+        const targetLayer = findFeature(floor, name.toString().toUpperCase());
         if (!targetLayer) return;
 
         if (!targetLayer.feature.properties.road_id) {
@@ -577,96 +747,113 @@ async function refreshOccupancy() {
             return;
         }
 
-        const pos = targetLayer.getLatLng ? targetLayer.getLatLng() : targetLayer.getBounds().getCenter();
-        applyPoint(name, pos, type);
+        applyPoint(floor, name, layerPos(targetLayer), type);
         map.closePopup();
     }
 
     function appendKey(k) { if (currentInput.length < 3) currentInput += k; document.getElementById('combinedInput').value = currentInput; }
-    
-    function clearInput(fullReset = false) { 
-        currentInput = ""; document.getElementById('combinedInput').value = ""; 
-        if (activeSpot) { 
-            // 清除搜尋選中時，判斷是否要回到車位占用樣式
-            if (isOccupancyMode && occupiedSet.has(activeSpot.feature.properties.name.toString())) {
-                activeSpot.setStyle({ fillOpacity: 0.7, fillColor: "#2d3436", color: "#000" });
-            } else {
-                geojsonLayer.resetStyle(activeSpot); 
-            }
-            activeSpot = null; 
-        }
-        if (fullReset) { 
-            if (routeLine) map.removeLayer(routeLine);
-            if (startMarker) map.removeLayer(startMarker);
-            if (endMarker) map.removeLayer(endMarker);
-            startData = null; endData = null; routeLine = null; startMarker = null; endMarker = null;
-            document.getElementById('routeStatus').style.display = "none";
+
+    function resetActiveSpot() {
+        if (!activeSpot) return;
+        const f = floors[activeSpot.floor], l = activeSpot.layer;
+        activeSpot = null;
+        // 清除搜尋選中時，判斷是否要回到車位占用樣式
+        if (isOccupancyMode && f.occupied.has(l.feature.properties.name.toString())) l.setStyle(OCCUPIED_STYLE);
+        else f.geojson.resetStyle(l);
+    }
+
+    function clearInput(fullReset = false) {
+        currentInput = ""; document.getElementById('combinedInput').value = "";
+        resetActiveSpot();
+        if (fullReset) {
+            clearRoute();
+            removeMarker(startMarker);
+            removeMarker(endMarker);
+            startData = null; endData = null; startMarker = null; endMarker = null;
+            showFloor(currentFloor);
         }
     }
 
     function toggleKeypad() {
         const keypad = document.getElementById('keypadSection');
-        if (!keypad.classList.contains('active')) clearInput(true);
+        // 已完成一次導航才重置；只設定了起點或終點時保留，方便接續輸入
+        if (!keypad.classList.contains('active')) clearInput(!!(startData && endData));
         keypad.classList.toggle('active');
     }
 
     function setPoint(type) {
-        if (!currentInput || !geojsonLayer) return;
+        if (!currentInput || !floors[currentFloor].geojson) return;
         const targetName = formatInput(currentInput);
-        let target = null;
-        geojsonLayer.eachLayer(l => { if (l.feature.properties.name.toString().toUpperCase() === targetName) target = l; });
-        
-        if (!target) return alert("無此編號: " + targetName);
+        const target = findFeature(currentFloor, targetName);
+
+        if (!target) return alert(notFoundMsg(currentFloor, targetName));
 
         if (!target.feature.properties.road_id) {
             alert("此編號不可作為導航點（未配置路徑）");
             return;
         }
 
-        const pos = target.getLatLng ? target.getLatLng() : target.getBounds().getCenter();
-        applyPoint(targetName, pos, type);
+        applyPoint(currentFloor, targetName, layerPos(target), type);
     }
 
-    function applyPoint(name, pos, type) {
+    function applyPoint(floor, name, pos, type) {
+        const group = floors[floor].group;
         if (type === 'from') {
-            startData = { name, pos };
-            if (startMarker) map.removeLayer(startMarker);
-            startMarker = L.circleMarker(pos, { radius: 10, color: '#0984e3', fillColor: '#0984e3', fillOpacity: 1 }).addTo(map);
+            startData = { floor, name, pos };
+            removeMarker(startMarker);
+            startMarker = L.circleMarker(pos, { radius: 10, color: '#0984e3', fillColor: '#0984e3', fillOpacity: 1 }).addTo(group);
         } else {
-            endData = { name, pos };
-            if (endMarker) map.removeLayer(endMarker);
-            endMarker = L.marker(pos, { icon: redFlagIcon }).addTo(map);
+            endData = { floor, name, pos };
+            removeMarker(endMarker);
+            endMarker = L.marker(pos, { icon: redFlagIcon }).addTo(group);
         }
-        if (startData && endData) { drawRoute(); document.getElementById('keypadSection').classList.remove('active'); }
-        else { currentInput = ""; document.getElementById('combinedInput').value = ""; }
+        if (startData && endData) drawRoute();
+        else { currentInput = ""; document.getElementById('combinedInput').value = ""; updateRouteStatus(); }
+    }
+
+    // offsetY：目標往畫面下方偏移的像素，避免被搜尋面板遮住
+    function highlightSpot(floor, l, offsetY = 0) {
+        resetActiveSpot();
+        showFloor(floor);
+        const center = map.unproject(map.project(layerPos(l), 21).subtract([0, offsetY]), 21);
+        map.setView(center, 21);
+        l.setStyle(HIGHLIGHT_STYLE);
+        if (!offsetY) l.openPopup();
+        activeSpot = { floor, layer: l };
     }
 
     function executeSearch() {
-        if (!currentInput || !geojsonLayer) return;
+        if (!currentInput || !floors[currentFloor].geojson) return;
         const targetName = formatInput(currentInput);
-        let found = false;
-        geojsonLayer.eachLayer(l => {
-            if (l.feature.properties.name.toString().toUpperCase() === targetName) {
-                if (l.feature.properties.road_id) {
-                    const pos = l.getLatLng ? l.getLatLng() : l.getBounds().getCenter();
-                    map.setView(pos, 21);
-                    l.setStyle({ color: '#ff0000', opacity: 1, weight: 4, fillColor: '#ffff00', fillOpacity: 0.7 });
-                    l.openPopup(); activeSpot = l;
-                    document.getElementById('keypadSection').classList.remove('active');
-                    found = true;
-                }
-            }
-        });
-        if (!found && currentInput) alert("找不到具備路徑配置的有效編號: " + targetName);
+        const l = findFeature(currentFloor, targetName);
+        if (l && l.feature.properties.road_id) {
+            highlightSpot(currentFloor, l);
+            document.getElementById('keypadSection').classList.remove('active');
+        } else {
+            alert(l ? "找不到具備路徑配置的有效編號: " + targetName : notFoundMsg(currentFloor, targetName));
+        }
+    }
+
+    // 「停泊即時資訊」尋車結果按下「指引」：設定該車格為終點，再請使用者設定起點
+    function startGuide(floorStr, spotStr) {
+        const code = parseSpotCode(floorStr, spotStr);
+        const target = code && findFeature(code.floor, code.spot);
+        if (!target) return alert("找不到車格：" + spotStr);
+        clearInput(true);
+        applyPoint(code.floor, code.spot, layerPos(target), 'to');
+        document.getElementById('keypadSection').classList.add('active');
+        // 讓目標車格落在搜尋面板下方，避免在手機上被鍵盤遮住
+        const panel = document.querySelector('.search-container');
+        highlightSpot(code.floor, target, (panel.offsetTop + panel.offsetHeight) / 2);
     }
 
     // 維修使用：點擊地圖任何地方，自動在控制台輸出經緯度
     map.on('click', function(e) {
-        console.log(`"name": "請填號碼", "coords": [${e.latlng.lng}, ${e.latlng.lat}]`);
+        console.log(`[${currentFloor}] "name": "請填號碼", "coords": [${e.latlng.lng}, ${e.latlng.lat}]`);
     });
 
-    /** 
-     * 功能 A: [停車場現況彈窗] 
+    /**
+     * 功能 A: [停車場現況彈窗]
      */
     (function() {
         window.addEventListener('load', function() {
@@ -675,123 +862,42 @@ async function refreshOccupancy() {
             const closeBtn = document.getElementById('closeModal');
             const refreshBtn = document.getElementById('refreshModal');
             const iframe = document.getElementById('instantIframe');
-    
+
             if (!openBtn || !modal) return;
-    
+
             const openModal = (e) => {
                 e.preventDefault();
                 iframe.src = "instant.html?t=" + new Date().getTime();
                 modal.style.display = 'block';
                 document.body.style.overflow = 'hidden';
             };
-    
+
             const closeModal = () => {
                 modal.style.display = 'none';
                 document.body.style.overflow = 'auto';
                 iframe.src = "";
             };
-    
+
             openBtn.addEventListener('click', openModal);
             if (closeBtn) closeBtn.addEventListener('click', closeModal);
             if (refreshBtn) refreshBtn.addEventListener('click', () => {
                 iframe.src = "instant.html?t=" + new Date().getTime();
             });
-    
+
             // 點擊背景關閉
             modal.addEventListener('click', (e) => {
                 if (e.target === modal) closeModal();
             });
-        });
-    })();
-    
-    
-    /** 
-     * 功能 B: [B1平面圖 Panzoom 縮放彈窗] 
-     */
-    (function() {
-        window.addEventListener('load', function() {
-            const mapModal = document.getElementById('mapModalOverlay');
-            const openMapBtn = document.getElementById('openMap');
-            const closeMapBtn = document.getElementById('closeMapModal');
-            const panElement = document.getElementById('panzoomElement');
-            const mapContainer = document.getElementById('mapContainer');
-            const img = document.getElementById('targetSvg'); // 取得圖片元素
-            const mapContent = document.getElementById('mapModalContent');
-            const maxMapBtn = document.getElementById('maximizeMap');
- 
-            if (!openMapBtn || !mapModal || !panElement || typeof Panzoom === 'undefined') return;
-    
-            const pz = Panzoom(panElement, {
-                maxScale: 15,
-                minScale: 0.5,
-                step: 0.8,
-                animate: true,
-                duration: 250,
-                contain: null
-            });
 
-            // 全螢幕
-            if (maxMapBtn && mapContent) {
-                maxMapBtn.addEventListener('click', function() {
-                    mapContent.classList.toggle('is-maximized');
-                    setTimeout(() => {
-                        pz.reset({ animate: true });
-                        pz.pan(0, 0, { animate: true });
-                    }, 310);
-                });
-            }
-    
-            mapContainer.addEventListener('wheel', (e) => {
-                pz.zoomWithWheel(e, { step: 0.2 });
+            // 接收 instant.html「指引」按鈕的訊息：關閉彈窗後進行車格導引
+            window.addEventListener('message', (e) => {
+                if (e.origin !== location.origin || !e.data || e.data.type !== 'parking-guide') return;
+                closeModal();
+                dataReady.then(() => startGuide(e.data.floor, e.data.spot));
             });
-    
-            const openMap = (e) => {
-                e.preventDefault();
-                
-                // 1. 先打開視窗 (讓瀏覽器知道容器大小)
-                mapModal.style.display = 'block';
-                document.body.style.overflow = 'hidden';
-                
-                // 2. 指派 src (強制重新載入向量資料)
-                if (img.src === "" || img.src !== window.location.origin + "/B1-20260501.svg") {
-                    img.src = "B1-20260501.svg";
-                }
-    
-                // 3. 等待圖片載入完成後再計算縮放
-                img.onload = () => {
-                    setTimeout(() => {
-                        const containerWidth = mapContainer.clientWidth;
-                        const imgWidth = img.offsetWidth;
-                        const fillWidthScale = containerWidth / imgWidth;
-                        
-                        pz.zoom(fillWidthScale, { animate: false });
-                        pz.pan(0, 0, { animate: false });
-                    }, 50);
-                };
-            };
-    
-            const closeMap = () => {
-                mapModal.style.display = 'none';
-                document.body.style.overflow = 'auto';
-                // 可選：關閉時清空 src，確保下次開啟又是全新的渲染
-                // img.src = ""; 
-            };
-    
-            openMapBtn.addEventListener('click', openMap);
-            if (closeMapBtn) closeMapBtn.addEventListener('click', closeMap);
-    
-            // 防誤觸邏輯 (保持原本的 mousedown/mouseup 判定)
-            let mousedownTarget = null;
-            mapModal.addEventListener('mousedown', (e) => { mousedownTarget = e.target; });
-            mapModal.addEventListener('mouseup', (e) => {
-                if (mousedownTarget === mapModal && e.target === mapModal) closeMap();
-                mousedownTarget = null;
-            });
-            mapContainer.addEventListener('mousedown', (e) => e.stopPropagation());
-            mapContainer.addEventListener('mouseup', (e) => e.stopPropagation());
         });
     })();
-    
+
 </script>
 </body>
 </html>

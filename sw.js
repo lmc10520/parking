@@ -1,15 +1,19 @@
-const CACHE_NAME = 'b2-parking-v7';
+const CACHE_NAME = 'b2-parking-v8';
 const ASSETS = [
   './',               // 首頁
-  './index.html',     
-  './weiwuying_parking.geojson',
-  './B2-20250921.svg', // 你的 SVG 底圖
+  './index.html',
+  './instant.html',
+  './parking.geojson',      // B2 圖資
+  './parking-b1.geojson',   // B1 圖資
+  './B2-20260503.svg',      // B2 SVG 底圖
+  './B1-20260501-geo.svg',  // B1 SVG 底圖（已對齊 B2）
+  './EV.svg',               // 電梯 CI 標示
+  './stair.svg',            // 樓梯 CI 標示
   './manifest.json',
   './icon.png',
   // 必須強制快取外部的 Leaflet 資源
   'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css',
-  'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js',
-  'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png' // 如果想留底圖（但離線時這行可能抓不全，建議靠 SVG）
+  'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js'
 ];
 
 // 安裝 Service Worker 並快取所有資源
@@ -34,17 +38,12 @@ self.addEventListener('activate', (event) => {
   );
 });
 
-// 攔截網路請求，優先回傳快取內容
+// 攔截網路請求，優先回傳快取內容（忽略 ?t= 等查詢字串，讓 instant.html 離線也能開啟）
 self.addEventListener('fetch', (event) => {
   event.respondWith(
-    caches.match(event.request).then((response) => {
+    caches.match(event.request, { ignoreSearch: new URL(event.request.url).origin === location.origin }).then((response) => {
       return response || fetch(event.request);
     })
   );
 
 });
-
-
-
-
-

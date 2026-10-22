@@ -37,6 +37,9 @@ td:first-child,th:first-child{text-align:left}
 .result-row:last-child{border-bottom:none}
 .result-plate{font-weight:600}
 .result-spot{color:var(--red);font-weight:700;font-size:1.1em}
+.result-right{display:flex;align-items:center;gap:10px}
+.guide-btn{background:#2f3542;color:#fff;border:none;padding:6px 12px;border-radius:6px;font-weight:700;font-size:0.85em;cursor:pointer;white-space:nowrap}
+.guide-btn:active{filter:brightness(0.85)}
 .no-result{color:#c62828;font-size:0.9em;padding-top:6px}
 .hint{color:var(--muted);font-size:0.88em;padding-top:6px}
 
@@ -93,7 +96,7 @@ const API="https://analytics.sto-tek.com/_nodered/api/callExternalAPI?apiKey=495
 const TOTAL_B1=221,TOTAL_B2=495;
 const SPECIAL_B2={dis:18,par:11,ev:15};
 const SPECIAL_B1={dis:5,par:4,ev:0};
-let allData=[];
+let allData=[],lastHits=[];
 
 function set(id,v){const e=document.getElementById(id);if(e)e.textContent=v;}
 
@@ -145,7 +148,18 @@ function searchCar(){
   if(q.length<2){out.innerHTML='<div class="hint">請輸入至少 2 碼</div>';return;}
   const hits=allData.filter(d=>d.LicensePlate&&d.LicensePlate!=='NONE'&&d.LicensePlate.toString().includes(q));
   if(!hits.length){out.innerHTML=`<div class="no-result">找不到含「${q}」的車牌</div>`;return;}
-  out.innerHTML=hits.map(c=>`<div class="result-row"><span class="result-plate">${c.LicensePlate}</span><span class="result-spot">${c.Floor}　${c.ParkingNumber}</span></div>`).join('');
+  lastHits=hits;
+  out.innerHTML=hits.map((c,i)=>`<div class="result-row"><span class="result-plate">${c.LicensePlate}</span><span class="result-right"><span class="result-spot">${c.Floor}　${c.ParkingNumber}</span><button class="guide-btn" onclick="guide(${i})">指引</button></span></div>`).join('');
+}
+
+// 「指引」：通知主頁面關閉彈窗並導引至該車格；若單獨開啟本頁則轉到主頁面
+function guide(i){
+  const c=lastHits[i]; if(!c)return;
+  if(window.parent!==window){
+    window.parent.postMessage({type:'parking-guide',floor:c.Floor,spot:c.ParkingNumber},location.origin);
+  }else{
+    location.href='index.html?guide='+encodeURIComponent(c.ParkingNumber);
+  }
 }
 
 update();
