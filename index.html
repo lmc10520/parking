@@ -319,6 +319,7 @@
     let currentInput = "", activeSpot = null; // activeSpot: { floor, layer }
     let startData = null, endData = null, startMarker = null, endMarker = null;
     let routeLegs = []; // [{ floor, line, connectorMarker }]
+    let fixedStart = null; // 由 ?start= 帶入的固定起點 { floor, name, pos }，點選地圖即直接設為終點
     let isOccupancyMode = false;
 
     const map = L.map('map', { center: [22.6231, 120.3425], zoom: 19, maxZoom: 24, minZoom: 17, zoomControl: false });
@@ -351,6 +352,11 @@
                         </div>
                     `;
                     layer.bindPopup(popupContent);
+                    // 固定起點模式：點選即設為終點並規劃路線，不需再按彈窗按鈕
+                    layer.on('click', () => {
+                        if (!fixedStart || (fixedStart.floor === floor && fixedStart.name.toString().toUpperCase() === name.toString().toUpperCase())) return;
+                        setPointViaMap(floor, name, 'to');
+                    });
                 } else {
                     layer.bindPopup(title);
                 }
@@ -364,8 +370,12 @@
             floors[f].geojson = buildGeojsonLayer(f, data).addTo(floors[f].group);
         })
     )).then(() => {
+        const params = new URLSearchParams(location.search);
+        // 由定點 QR code 開啟時，以 ?start=戲劇院B2票口 帶入固定起點（同名區域可加 &floor=B1 指定樓層）
+        const start = params.get('start');
+        if (start) setFixedStart(start, params.get('floor'));
         // 由「停泊即時資訊」獨立開啟時，以 ?guide=B1F-052 帶入指引
-        const guide = new URLSearchParams(location.search).get('guide');
+        const guide = params.get('guide');
         if (guide) startGuide('', guide);
     });
 
@@ -548,6 +558,22 @@ async function refreshOccupancy() {
         return target;
     }
 
+    // 依名稱或車格代碼（例如 戲劇院B2票口、B1F-052、A01）尋找導航點，preferFloor 優先，其次 B2、B1
+    function resolvePoint(str, preferFloor) {
+        const code = parseSpotCode('', str);
+        if (code) {
+            const l = findFeature(code.floor, code.spot);
+            if (l) return { floor: code.floor, name: code.spot, layer: l };
+        }
+        const name = formatInput(str.trim());
+        const order = [preferFloor && preferFloor.toUpperCase(), 'B2', 'B1'].filter(f => floors[f]);
+        for (const f of order) {
+            const l = findFeature(f, name);
+            if (l && l.feature.properties.road_id) return { floor: f, name: l.feature.properties.name, layer: l };
+        }
+        return null;
+    }
+
     function layerPos(l) { return l.getLatLng ? l.getLatLng() : l.getBounds().getCenter(); }
 
     function notFoundMsg(floor, name) {
@@ -719,6 +745,9 @@ async function refreshOccupancy() {
             if (endData && !startData) {
                 box.style.display = "block";
                 box.innerHTML = `終點 ${pointLabel(endData)}<span class="route-hint">請輸入或點選目前位置，設為起點</span>`;
+            } else if (startData && !endData && fixedStart) {
+                box.style.display = "block";
+                box.innerHTML = `目前位置 ${pointLabel(startData)}<span class="route-hint">請點選地圖上的車格或柱號，即開始導航</span>`;
             } else {
                 box.style.display = "none";
             }
@@ -747,6 +776,7 @@ async function refreshOccupancy() {
             return;
         }
 
+        if (type === 'from') fixedStart = null; // 手動設定起點即取消固定起點
         applyPoint(floor, name, layerPos(targetLayer), type);
         map.closePopup();
     }
@@ -770,6 +800,8 @@ async function refreshOccupancy() {
             removeMarker(startMarker);
             removeMarker(endMarker);
             startData = null; endData = null; startMarker = null; endMarker = null;
+            // 固定起點模式下重新搜尋時保留起點
+            if (fixedStart) applyPoint(fixedStart.floor, fixedStart.name, fixedStart.pos, 'from');
             showFloor(currentFloor);
         }
     }
@@ -793,6 +825,7 @@ async function refreshOccupancy() {
             return;
         }
 
+        if (type === 'from') fixedStart = null; // 手動設定起點即取消固定起點
         applyPoint(currentFloor, targetName, layerPos(target), type);
     }
 
@@ -809,6 +842,15 @@ async function refreshOccupancy() {
         }
         if (startData && endData) drawRoute();
         else { currentInput = ""; document.getElementById('combinedInput').value = ""; updateRouteStatus(); }
+    }
+
+    function setFixedStart(str, preferFloor) {
+        const p = resolvePoint(str, preferFloor);
+        if (!p) return alert("找不到起點：" + str);
+        fixedStart = { floor: p.floor, name: p.name, pos: layerPos(p.layer) };
+        clearInput(true);
+        showFloor(p.floor);
+        map.setView(fixedStart.pos, 20);
     }
 
     // offsetY：目標往畫面下方偏移的像素，避免被搜尋面板遮住
