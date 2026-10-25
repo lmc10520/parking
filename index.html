@@ -374,9 +374,9 @@
         // 由定點 QR code 開啟時，以 ?start=戲劇院B2票口 帶入固定起點（同名區域可加 &floor=B1 指定樓層）
         const start = params.get('start');
         if (start) setFixedStart(start, params.get('floor'));
-        // 由「停泊即時資訊」獨立開啟時，以 ?guide=B1F-052 帶入指引
+        // 以 ?guide= 帶入終點：車格代碼 B1F-052（「停泊即時資訊」獨立開啟時使用）、柱號 A01 或區域名稱
         const guide = params.get('guide');
-        if (guide) startGuide('', guide);
+        if (guide) startGuide('', guide, params.get('floor'));
     });
 
     // --- 樓層切換 ---
@@ -560,7 +560,9 @@ async function refreshOccupancy() {
 
     // 依名稱或車格代碼（例如 戲劇院B2票口、B1F-052、A01）尋找導航點，preferFloor 優先，其次 B2、B1
     function resolvePoint(str, preferFloor) {
-        const code = parseSpotCode('', str);
+        // 柱號（例如 B25）不可當成車格代碼解析，否則會被誤判為 B2 第 5 格
+        const isPillar = /^[A-E]\d{1,2}$/i.test(str.trim());
+        const code = !isPillar && parseSpotCode('', str);
         if (code) {
             const l = findFeature(code.floor, code.spot);
             if (l) return { floor: code.floor, name: code.spot, layer: l };
@@ -877,16 +879,23 @@ async function refreshOccupancy() {
     }
 
     // 「停泊即時資訊」尋車結果按下「指引」：設定該車格為終點，再請使用者設定起點
-    function startGuide(floorStr, spotStr) {
-        const code = parseSpotCode(floorStr, spotStr);
-        const target = code && findFeature(code.floor, code.spot);
-        if (!target) return alert("找不到車格：" + spotStr);
+    // 網址 ?guide= 帶入時 floorStr 為空，另可接受柱號、區域名稱，preferFloor 指定同名項目的樓層
+    function startGuide(floorStr, spotStr, preferFloor) {
+        let p = null;
+        if (floorStr) {
+            const code = parseSpotCode(floorStr, spotStr);
+            const layer = code && findFeature(code.floor, code.spot);
+            if (layer) p = { floor: code.floor, name: code.spot, layer };
+        } else {
+            p = resolvePoint(String(spotStr), preferFloor);
+        }
+        if (!p) return alert("找不到目的地：" + spotStr);
         clearInput(true);
-        applyPoint(code.floor, code.spot, layerPos(target), 'to');
+        applyPoint(p.floor, p.name, layerPos(p.layer), 'to');
         document.getElementById('keypadSection').classList.add('active');
-        // 讓目標車格落在搜尋面板下方，避免在手機上被鍵盤遮住
+        // 讓目標落在搜尋面板下方，避免在手機上被鍵盤遮住
         const panel = document.querySelector('.search-container');
-        highlightSpot(code.floor, target, (panel.offsetTop + panel.offsetHeight) / 2);
+        highlightSpot(p.floor, p.layer, (panel.offsetTop + panel.offsetHeight) / 2);
     }
 
     // 維修使用：點擊地圖任何地方，自動在控制台輸出經緯度
