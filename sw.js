@@ -1,4 +1,4 @@
-const CACHE_NAME = 'b2-parking-v10';
+const CACHE_NAME = 'b2-parking-v11';
 const ASSETS = [
   './',               // 首頁
   './index.html',

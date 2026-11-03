@@ -650,7 +650,10 @@ async function refreshOccupancy() {
         return [x1 + t*dx, y1 + t*dy];
     }
 
-    function getNearestPathInfo(net, latlng) {
+    // roadId（例如 C2D2，為出入口門所在的車道）存在於路網時，直接投影到該段車道；否則取最近的車道
+    function getNearestPathInfo(net, latlng, roadId) {
+        const edge = roadId && net.edges.find(([u, v]) => u + v === roadId || v + u === roadId);
+        if (edge) return { proj: getProjectionPoint(latlng, net.nodes[edge[0]], net.nodes[edge[1]]), nodes: [...edge] };
         let minD = Infinity, best = null;
         net.edges.forEach(([u, v]) => {
             const proj = getProjectionPoint(latlng, net.nodes[u], net.nodes[v]);
@@ -660,10 +663,16 @@ async function refreshOccupancy() {
         return best;
     }
 
-    // 計算單一樓層內兩點間的路徑，回傳 { latlngs, dist }
-    function routeOnFloor(floor, fromPos, toPos) {
+    function roadIdOf(floor, name) {
+        const l = findFeature(floor, String(name).toUpperCase());
+        return l ? l.feature.properties.road_id : null;
+    }
+
+    // 計算單一樓層內兩點間的路徑，回傳 { latlngs, dist }；fromName、toName 用來取得各自的 road_id
+    function routeOnFloor(floor, fromPos, toPos, fromName, toName) {
         const net = floors[floor].network;
-        const sInfo = getNearestPathInfo(net, fromPos), eInfo = getNearestPathInfo(net, toPos);
+        const sInfo = getNearestPathInfo(net, fromPos, roadIdOf(floor, fromName));
+        const eInfo = getNearestPathInfo(net, toPos, roadIdOf(floor, toName));
         if (!sInfo || !eInfo) return null;
         const from = [fromPos.lng, fromPos.lat], to = [toPos.lng, toPos.lat];
         let bestPath = null, minTotalDist = Infinity;
@@ -705,7 +714,7 @@ async function refreshOccupancy() {
         const legs = [];
         let via = null;
         if (startData.floor === endData.floor) {
-            const r = routeOnFloor(startData.floor, startData.pos, endData.pos);
+            const r = routeOnFloor(startData.floor, startData.pos, endData.pos, startData.name, endData.name);
             if (!r) return;
             legs.push({ floor: startData.floor, latlngs: r.latlngs });
         } else {
@@ -715,8 +724,8 @@ async function refreshOccupancy() {
                 const a = findFeature(startData.floor, c.name.toUpperCase());
                 const b = findFeature(endData.floor, c.name.toUpperCase());
                 if (!a || !b) return;
-                const r1 = routeOnFloor(startData.floor, startData.pos, layerPos(a));
-                const r2 = routeOnFloor(endData.floor, layerPos(b), endData.pos);
+                const r1 = routeOnFloor(startData.floor, startData.pos, layerPos(a), startData.name, c.name);
+                const r2 = routeOnFloor(endData.floor, layerPos(b), endData.pos, c.name, endData.name);
                 if (r1 && r2 && (!best || r1.dist + r2.dist < best.dist)) best = { c, r1, r2, a, b, dist: r1.dist + r2.dist };
             });
             if (!best) return alert("找不到可往返樓層的樓梯或電梯");
