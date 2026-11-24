@@ -2,7 +2,7 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#f0f0f0">
     <meta name="description" content="提供B2觀眾停車場、B1演職人員停車場車格號碼、柱號的檢索與路線導引">
     <title>B2停車場導航</title>
@@ -16,6 +16,20 @@
     <style>
         body { margin: 0; padding: 0; background: #eee; overflow: hidden; }
 
+        /* 畫面上不顯示、但螢幕報讀器可讀取的文字 */
+        .visually-hidden:where(:not(:focus-within, :active)) {
+            position: absolute !important; clip-path: inset(50%) !important; overflow: hidden !important;
+            width: 1px !important; height: 1px !important; margin: -1px !important;
+            padding: 0 !important; border: 0 !important; white-space: nowrap !important;
+        }
+
+        /* 鍵盤操作時的焦點框 */
+        :where(button, a:any-link, input, [tabindex]):focus-visible { outline: 3px solid #0984e3; outline-offset: 2px; }
+        #combinedInput:focus-visible { outline-offset: -4px; }
+
+        /* 按鈕取消雙擊放大，避免連續點按鍵盤時畫面被放大 */
+        button, #combinedInput { touch-action: manipulation; }
+
         #map {
             height: 100vh; width: 100vw;
             background-color: #f0f0f0;
@@ -24,6 +38,8 @@
         }
 
         #map.compass-mode { scale: 2.2; }
+        /* 系統設定減少動態效果時，羅盤旋轉、放大不使用動畫 */
+        @media (prefers-reduced-motion: reduce) { #map { transition: none; } }
 
         .search-container {
             position: absolute; top: 12px; left: 12px; z-index: 1000;
@@ -82,8 +98,8 @@
         .btn-d { background-color: #0072BE !important; color: white; border: none; }
         .btn-e { background-color: #2B8D56 !important; color: white; border: none; }
 
-        .key-btn.func-clear { background: #fff5f5; color: #e03131; border-color: #ffa8a8; }
-        .key-btn.func-search { background: #f4fce3; color: #2f9e44; border-color: #c0eb75; }
+        .key-btn.func-clear { background: #fff5f5; color: #d22e2e; border-color: #ffa8a8; }
+        .key-btn.func-search { background: #f4fce3; color: #268137; border-color: #c0eb75; }
 
         .key-btn.nav-point {
             background-color: #f1f2f6;
@@ -102,7 +118,7 @@
             border: 2px solid #ccc; border-radius: 50%;
             display: flex; align-items: center; justify-content: center;
             font-size: 24px; cursor: pointer; box-shadow: 0 2px 8px rgba(0,0,0,0.2);
-            text-decoration: none; color: black;
+            text-decoration: none; color: black; padding: 0;
         }
         #compassBtn.active { background: #ff4757; color: white; border-color: #d63031; }
         #occupancyBtn.active { background: #2f3542; border-color: #000; color: white; }
@@ -119,7 +135,7 @@
             font-size: 18px; font-weight: bold; color: #2f3542; line-height: 1.1;
         }
         .floor-switch button + button { border-top: 1px solid #ddd; }
-        .floor-switch button small { display: block; font-size: 10px; font-weight: normal; color: #888; margin-top: 2px; }
+        .floor-switch button small { display: block; font-size: 10px; font-weight: normal; color: #666; margin-top: 2px; }
         .floor-switch button.active { background: #2f3542; color: #fff; }
         .floor-switch button.active small { color: #dfe4ea; }
         .floor-switch button[data-floor="B1"].active { background: #6c5ce7; }
@@ -131,40 +147,34 @@
             border-radius: 5px; border: 1px solid #ccc; font-weight: bold;
             cursor: pointer; font-size: 14px; box-sizing: border-box;
         }
-        .popup-btn.from { background: #0984e3; color: white; border: none; }
+        .popup-btn.from { background: #076ebe; color: white; border: none; }
         .popup-btn.to { background: #d63031; color: white; border: none; }
 
-        /* 彈出式視窗背景（遮罩） */
-        .modal-overlay {
-            display: none; /* 預設隱藏 */
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0, 0, 0, 0.6); /* 半透明黑 */
-            z-index: 9999; /* 確保在最上層 */
-            backdrop-filter: blur(4px); /* 背景模糊，增加質感 */
-            cursor: no-drop;
-        }
-
-        /* 彈出式視窗主體 */
+        /* 彈出式視窗（原生 <dialog>，開啟時瀏覽器自動置中並放在最上層） */
         .modal-content {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
             width: 90%;
             max-width: 800px; /* 最大寬度 */
             height: 80vh; /* 高度佔螢幕 80% */
+            max-height: none;
+            padding: 0;
+            border: none;
             background: white;
             border-radius: 12px;
             overflow: hidden;
-            display: flex;
-            flex-direction: column;
             box-shadow: 0 10px 30px rgba(0,0,0,0.3);
-            cursor: auto;
+            font-family: sans-serif;
         }
+        .modal-content[open] { display: flex; flex-direction: column; }
+        .modal-content:modal { overscroll-behavior: contain; }
+
+        /* 彈出式視窗背景（遮罩） */
+        .modal-content::backdrop {
+            background: rgba(0, 0, 0, 0.6); /* 半透明黑 */
+            backdrop-filter: blur(4px); /* 背景模糊，增加質感 */
+            overflow: hidden;
+            overscroll-behavior: contain;
+        }
+        .modal-title { margin: 0; font-size: 1rem; }
 
         /* 彈出式視窗標題列 */
         .modal-header {
@@ -206,22 +216,26 @@
 </head>
 <body>
 
+<main>
+<h1 class="visually-hidden">衛武營停車場導航</h1>
+
 <div class="floating-btns">
-    <div id="compassBtn" class="side-btn" onclick="toggleCompass()" title="啟動陀螺儀">🧭</div>
-    <a href="javascript:void(0)" id="openInstant" class="side-btn" title="停泊即時資訊">🔗</a>
-    <div id="occupancyBtn" class="side-btn" onclick="toggleOccupancy()" title="顯示即時車位">🚥</div>
+    <button type="button" id="compassBtn" class="side-btn" onclick="toggleCompass()" title="啟動陀螺儀" aria-label="羅盤定向" aria-pressed="false"><span aria-hidden="true">🧭</span></button>
+    <button type="button" id="openInstant" class="side-btn" title="停泊即時資訊" aria-label="停泊即時資訊" aria-haspopup="dialog"><span aria-hidden="true">🔗</span></button>
+    <button type="button" id="occupancyBtn" class="side-btn" onclick="toggleOccupancy()" title="顯示即時車位" aria-label="顯示即時車位" aria-pressed="false"><span aria-hidden="true">🚥</span></button>
 </div>
 
-<div id="floorSwitch" class="floor-switch">
-    <button data-floor="B1" onclick="showFloor('B1')" title="B1演職人員停車場">B1<small>演職人員</small></button>
-    <button data-floor="B2" class="active" onclick="showFloor('B2')" title="B2觀眾停車場">B2<small>觀眾</small></button>
+<div id="floorSwitch" class="floor-switch" role="group" aria-label="樓層">
+    <button type="button" data-floor="B1" onclick="showFloor('B1')" title="B1演職人員停車場" aria-pressed="false">B1<small>演職人員</small></button>
+    <button type="button" data-floor="B2" class="active" onclick="showFloor('B2')" title="B2觀眾停車場" aria-pressed="true">B2<small>觀眾</small></button>
 </div>
 
 <div class="search-container">
-    <div id="routeStatus"></div>
+    <div id="routeStatus" role="status" aria-live="polite"></div>
     <div class="input-row">
-        <button id="floorBadge" onclick="toggleInputFloor(event)" title="切換樓層">B2</button>
-        <input type="text" id="combinedInput" placeholder="點擊搜尋/導航" readonly onclick="toggleKeypad()">
+        <button type="button" id="floorBadge" onclick="toggleInputFloor(event)" title="切換樓層" aria-label="切換樓層，目前 B2">B2</button>
+        <input type="text" id="combinedInput" placeholder="點擊搜尋/導航" readonly onclick="toggleKeypad()"
+            aria-label="車格號碼或柱號（按 Enter 開啟數字鍵盤）">
     </div>
 
     <div id="keypadSection" class="keypad">
@@ -243,30 +257,29 @@
                 <button class="key-btn func-search" onclick="executeSearch()">搜尋</button>
             </div>
             <div class="key-row">
-                <button class="key-btn nav-point" style="color:#0984e3" onclick="setPoint('from')">設為起點</button>
-                <button class="key-btn nav-point" style="color:#d63031" onclick="setPoint('to')">設為終點</button>
+                <button class="key-btn nav-point" style="color:#076ebe" onclick="setPoint('from')">設為起點</button>
+                <button class="key-btn nav-point" style="color:#cd2e2f" onclick="setPoint('to')">設為終點</button>
             </div>
         </div>
     </div>
 </div>
 
 <!-- 停泊現況彈出式視窗結構 -->
-<div id="modalOverlay" class="modal-overlay" style="display:none;">
-    <div class="modal-content">
-        <div class="modal-header">
-            <span>停車場現況</span>
-            <div style="display: flex; align-items: center;">
-                <button id="refreshModal" title="重新整理" style="background:none; border:none; cursor:pointer; font-size:20px; margin-right:15px;">↻</button>
-                <button id="closeModal" title="關閉" style="background:none; border:none; font-size:24px; cursor:pointer;">&times;</button>
-            </div>
-        </div>
-        <div class="modal-body" style="flex:1;">
-            <iframe id="instantIframe" src="" frameborder="0" style="width:100%; height:100%;"></iframe>
+<dialog id="modalOverlay" class="modal-content" aria-labelledby="modalTitle" closedby="any">
+    <div class="modal-header">
+        <h1 id="modalTitle" class="modal-title">停車場現況</h1>
+        <div style="display: flex; align-items: center;">
+            <button type="button" id="refreshModal" title="重新整理" aria-label="重新整理" style="background:none; border:none; cursor:pointer; font-size:20px; margin-right:15px;">↻</button>
+            <button type="button" id="closeModal" title="關閉" aria-label="關閉" style="background:none; border:none; font-size:24px; cursor:pointer;">&times;</button>
         </div>
     </div>
-</div>
+    <div class="modal-body" style="flex:1;">
+        <iframe id="instantIframe" src="" title="停泊即時資訊" style="width:100%; height:100%; border:0;"></iframe>
+    </div>
+</dialog>
 
 <div id="map"></div>
+</main>
 
 <script>
     if ('serviceWorker' in navigator) {
@@ -382,6 +395,7 @@
     // --- 樓層切換 ---
     function showFloor(floor) {
         if (!floors[floor]) return;
+        document.getElementById('floorBadge').setAttribute('aria-label', `切換樓層，目前 ${floor}`);
         if (floor !== currentFloor) {
             map.closePopup();
             map.removeLayer(floors[currentFloor].group);
@@ -393,6 +407,7 @@
         badge.classList.toggle('is-b1', floor === 'B1');
         document.querySelectorAll('#floorSwitch button').forEach(b => {
             b.classList.toggle('active', b.dataset.floor === floor);
+            b.setAttribute('aria-pressed', b.dataset.floor === floor);
             b.classList.toggle('has-route', routeLegs.some(l => l.floor === b.dataset.floor));
         });
         updateRouteStatus();
@@ -817,6 +832,20 @@ async function refreshOccupancy() {
         }
     }
 
+    // 讓螢幕報讀器得知按鈕開關狀態：以 active 樣式同步 aria-pressed
+    const syncAriaState = new MutationObserver(() => {
+        ['compassBtn', 'occupancyBtn'].forEach(id => {
+            const b = document.getElementById(id);
+            b.setAttribute('aria-pressed', b.classList.contains('active'));
+        });
+    });
+    ['compassBtn', 'occupancyBtn'].forEach(id => syncAriaState.observe(document.getElementById(id), { attributeFilter: ['class'] }));
+
+    // 輸入框為唯讀，鍵盤使用者以 Enter 或空白鍵開關數字鍵盤
+    document.getElementById('combinedInput').addEventListener('keydown', e => {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleKeypad(); }
+    });
+
     function toggleKeypad() {
         const keypad = document.getElementById('keypadSection');
         // 已完成一次導航才重置；只設定了起點或終點時保留，方便接續輸入
@@ -925,18 +954,16 @@ async function refreshOccupancy() {
 
             if (!openBtn || !modal) return;
 
+            // 原生 <dialog>：showModal() 會鎖住背景頁面、移入焦點，Esc 或返回手勢即可關閉，關閉後焦點回到開啟按鈕
             const openModal = (e) => {
                 e.preventDefault();
                 iframe.src = "instant.html?t=" + new Date().getTime();
-                modal.style.display = 'block';
-                document.body.style.overflow = 'hidden';
+                modal.showModal();
             };
 
-            const closeModal = () => {
-                modal.style.display = 'none';
-                document.body.style.overflow = 'auto';
-                iframe.src = "";
-            };
+            const closeModal = () => modal.close();
+            // 任何方式關閉（按鈕、Esc、點擊背景）都清空 iframe，停止背景更新
+            modal.addEventListener('close', () => { iframe.src = ""; });
 
             openBtn.addEventListener('click', openModal);
             if (closeBtn) closeBtn.addEventListener('click', closeModal);
@@ -944,10 +971,13 @@ async function refreshOccupancy() {
                 iframe.src = "instant.html?t=" + new Date().getTime();
             });
 
-            // 點擊背景關閉
-            modal.addEventListener('click', (e) => {
-                if (e.target === modal) closeModal();
-            });
+            // 點擊背景關閉：支援 closedby 的瀏覽器會自動處理，其餘（Safari）以點擊位置判斷是否在視窗外
+            if (!('closedBy' in HTMLDialogElement.prototype)) {
+                modal.addEventListener('click', (e) => {
+                    const r = modal.getBoundingClientRect();
+                    if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) closeModal();
+                });
+            }
 
             // 接收 instant.html「指引」按鈕的訊息：關閉彈窗後進行車格導引
             window.addEventListener('message', (e) => {

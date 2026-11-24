@@ -2,11 +2,11 @@
 <html lang="zh-TW">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="description" content="停泊即時資訊">
 <title>停泊即時資訊</title>
 <style>
-:root{--red:#ff6263;--bg:#f2f2f2;--card:#fff;--text:#222;--muted:#888;--radius:10px}
+:root{--red:#ff6263;--bg:#f2f2f2;--card:#fff;--text:#222;--muted:#666;--radius:10px}
 *{box-sizing:border-box;margin:0;padding:0}
 body{background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;padding:14px;font-size:15px}
 h1{text-align:center;font-size:1.2em;font-weight:700;margin:10px 0 4px}
@@ -43,19 +43,22 @@ td:first-child,th:first-child{text-align:left}
 .no-result{color:#c62828;font-size:0.9em;padding-top:6px}
 .hint{color:var(--muted);font-size:0.88em;padding-top:6px}
 
-footer{text-align:center;font-size:0.7em;color:#bbb;margin-top:4px;padding-bottom:30px}
-footer a{color:#bbb;text-decoration:none}
+footer{text-align:center;font-size:0.7em;color:#666;margin-top:4px;padding-bottom:30px}
+footer a{color:#666;text-decoration:none}
+.visually-hidden{position:absolute!important;clip-path:inset(50%)!important;overflow:hidden!important;width:1px!important;height:1px!important;margin:-1px!important;padding:0!important;border:0!important;white-space:nowrap!important}
+:where(button,input):focus-visible{outline:3px solid #0984e3;outline-offset:2px}
 </style>
 </head>
 <body>
-  
-<div id="status">連線中…</div>
+<main>
+<h1 class="visually-hidden">停泊即時資訊</h1>
+<div id="status" role="status">連線中…</div>
 
 <!-- B2F -->
 <div class="card">
-  <div class="card-head">B2F <span id="head-b2">—</span></div>
-  <table>
-    <thead><tr><th>車位類型</th><th>總格數</th><th>已佔用</th><th>剩餘</th></tr></thead>
+  <div class="card-head" id="title-b2">B2F <span id="head-b2">—</span></div>
+  <table aria-labelledby="title-b2">
+    <thead><tr><th scope="col">車位類型</th><th scope="col">總格數</th><th scope="col">已佔用</th><th scope="col">剩餘</th></tr></thead>
     <tbody>
       <tr><td>一般</td><td id="tot-b2-gen">—</td><td class="occ" id="occ-b2-gen">—</td><td class="avail" id="avl-b2-gen">—</td></tr>
       <tr><td>身障</td><td>18</td><td class="occ" id="occ-b2-dis">—</td><td class="avail" id="avl-b2-dis">—</td></tr>
@@ -67,9 +70,9 @@ footer a{color:#bbb;text-decoration:none}
 
 <!-- B1F -->
 <div class="card">
-  <div class="card-head">B1F <span id="head-b1">—</span></div>
-  <table>
-    <thead><tr><th>車位類型</th><th>總格數</th><th>已佔用</th><th>剩餘</th></tr></thead>
+  <div class="card-head" id="title-b1">B1F <span id="head-b1">—</span></div>
+  <table aria-labelledby="title-b1">
+    <thead><tr><th scope="col">車位類型</th><th scope="col">總格數</th><th scope="col">已佔用</th><th scope="col">剩餘</th></tr></thead>
     <tbody>
       <tr><td>一般</td><td id="tot-b1-gen">—</td><td class="occ" id="occ-b1-gen">—</td><td class="avail" id="avl-b1-gen">—</td></tr>
       <tr><td>身障</td><td>5</td><td class="occ" id="occ-b1-dis">—</td><td class="avail" id="avl-b1-dis">—</td></tr>
@@ -80,14 +83,15 @@ footer a{color:#bbb;text-decoration:none}
 
 <!-- 搜尋 -->
 <div class="search-card">
-  <h2>🔍 尋車</h2>
+  <h2><span aria-hidden="true">🔍</span> 尋車</h2>
   <div class="input-row">
-    <input type="tel" id="plateInput" inputmode="numeric" pattern="[0-9]*" placeholder="輸入車牌數字"
-      onkeyup="if(event.keyCode===13)searchCar()">
-    <button id="search-btn" onclick="searchCar()">搜尋</button>
+    <input type="tel" id="plateInput" inputmode="numeric" pattern="[0-9]*" placeholder="輸入車牌數字" aria-label="車牌數字"
+      onkeyup="if(event.key==='Enter')searchCar()">
+    <button type="button" id="search-btn" onclick="searchCar()">搜尋</button>
   </div>
-  <div id="result"></div>
+  <div id="result" aria-live="polite"></div>
 </div>
+</main>
 
 <footer>本資料為公益性質之使用，非營利且不涉及任何商業行為。如有涉及著作權之資料來源及其內容，皆屬原權利人所有，所有資訊皆源自網路上搜尋之開放資料進行統計呈現。</footer>
 
@@ -99,6 +103,8 @@ const SPECIAL_B1={dis:5,par:4,ev:0};
 let allData=[],lastHits=[];
 
 function set(id,v){const e=document.getElementById(id);if(e)e.textContent=v;}
+// 輸入內容與 API 資料放進 innerHTML 前先跳脫，避免被當成 HTML 執行
+const esc=v=>String(v).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
 async function update(){
   try{
@@ -147,9 +153,9 @@ function searchCar(){
   if(!q){out.innerHTML='<div class="hint">請輸入車牌數字</div>';return;}
   if(q.length<2){out.innerHTML='<div class="hint">請輸入至少 2 碼</div>';return;}
   const hits=allData.filter(d=>d.LicensePlate&&d.LicensePlate!=='NONE'&&d.LicensePlate.toString().includes(q));
-  if(!hits.length){out.innerHTML=`<div class="no-result">找不到含「${q}」的車牌</div>`;return;}
+  if(!hits.length){out.innerHTML=`<div class="no-result">找不到含「${esc(q)}」的車牌</div>`;return;}
   lastHits=hits;
-  out.innerHTML=hits.map((c,i)=>`<div class="result-row"><span class="result-plate">${c.LicensePlate}</span><span class="result-right"><span class="result-spot">${c.Floor}　${c.ParkingNumber}</span><button class="guide-btn" onclick="guide(${i})">指引</button></span></div>`).join('');
+  out.innerHTML=hits.map((c,i)=>`<div class="result-row"><span class="result-plate">${esc(c.LicensePlate)}</span><span class="result-right"><span class="result-spot">${esc(c.Floor)}　${esc(c.ParkingNumber)}</span><button type="button" class="guide-btn" onclick="guide(${i})" aria-label="指引 ${esc(c.LicensePlate)} 至 ${esc(c.ParkingNumber)}">指引</button></span></div>`).join('');
 }
 
 // 「指引」：通知主頁面關閉彈窗並導引至該車格；若單獨開啟本頁則轉到主頁面
